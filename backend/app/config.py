@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     
+    # WebTorrent Settings
+    ENABLE_TORRENT: bool = False
+    TORRENT_MAGNET_URI: str = ""
+    
     @property
     def origins_list(self) -> List[str]:
         """Parse ALLOWED_ORIGINS into a list"""

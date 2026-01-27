@@ -55,6 +55,13 @@ async def startup_event():
         connect_neo4j()
     except Exception as e:
         logger.warning(f"Neo4j not connected (optional): {e}")
+    
+    # Start torrent service (optional)
+    try:
+        from app.services.torrent_service import torrent_service
+        torrent_service.start()
+    except Exception as e:
+        logger.warning(f"Torrent service not started (optional): {e}")
 
 
 @app.on_event("shutdown")
@@ -63,6 +70,13 @@ async def shutdown_event():
     logger.info("Shutting down...")
     close_mongodb()
     close_neo4j()
+    
+    # Stop torrent service
+    try:
+        from app.services.torrent_service import torrent_service
+        torrent_service.stop()
+    except Exception as e:
+        logger.warning(f"Torrent service shutdown error: {e}")
 
 
 @app.get("/")
@@ -95,7 +109,7 @@ async def health_check():
 
 
 # Import routers
-from app.routers import books, members, circulation, dashboard, reports
+from app.routers import books, members, circulation, dashboard, reports, torrent
 
 # Include routers
 app.include_router(books.router, prefix=settings.API_V1_PREFIX)
@@ -103,6 +117,7 @@ app.include_router(members.router, prefix=settings.API_V1_PREFIX)
 app.include_router(circulation.router, prefix=settings.API_V1_PREFIX)
 app.include_router(dashboard.router, prefix=settings.API_V1_PREFIX)
 app.include_router(reports.router, prefix=settings.API_V1_PREFIX)
+app.include_router(torrent.router, prefix=settings.API_V1_PREFIX)
 
 
 if __name__ == "__main__":
