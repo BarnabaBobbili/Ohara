@@ -1,12 +1,13 @@
 """
 Books API Router
-CRUD endpoints for book management
+CRUD endpoints for book management - Using Raw SQL
 """
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from typing import List, Optional
 from app.database.sql import get_db
-from app.models import sql_models, schemas
+from app.models import schemas
 from datetime import datetime
 
 router = APIRouter(prefix="/books", tags=["books"])
@@ -21,29 +22,42 @@ def get_books(
     db: Session = Depends(get_db)
 ):
     """Get all books with optional filtering"""
-    query = db.query(sql_models.Book)
+    # Build dynamic query
+    query_str = "SELECT * FROM books WHERE 1=1"
+    params = {}
     
     if category:
-        query = query.filter(sql_models.Book.category == category)
+        query_str += " AND category = :category"
+        params["category"] = category
     
     if search:
-        query = query.filter(
-            (sql_models.Book.title.contains(search)) |
-            (sql_models.Book.author.contains(search)) |
-            (sql_models.Book.isbn.contains(search))
-        )
+        query_str += " AND (title LIKE :search OR author LIKE :search OR isbn LIKE :search)"
+        params["search"] = f"%{search}%"
     
-    books = query.offset(skip).limit(limit).all()
-    return books
+    query_str += " LIMIT :limit OFFSET :skip"
+    params["limit"] = limit
+    params["skip"] = skip
+    
+    result = db.execute(text(query_str), params)
+    books = result.fetchall()
+    
+    # Convert to dict for response model
+    return [dict(row._mapping) for row in books]
 
 
 @router.get("/{book_id}", response_model=schemas.Book)
 def get_book(book_id: int, db: Session = Depends(get_db)):
     """Get a specific book by ID"""
-    book = db.query(sql_models.Book).filter(sql_models.Book.id == book_id).first()
+    result = db.execute(
+        text("SELECT * FROM books WHERE id = :book_id"),
+        {"book_id": book_id}
+    )
+    book = result.fetchone()
+    
     if not book:
         raise HTTPException(status_code=404, detail="Book not found")
-    return book
+    
+    return dict(book._mapping)
 
 
 @router.post("/", response_model=schemas.Book, status_code=status.HTTP_201_CREATED)
@@ -52,15 +66,57 @@ def create_book(book: schemas.BookCreate, db: Session = Depends(get_db)):
     from app.database.mongodb import get_activity_logs_collection
     
     # Check if ISBN already exists
-    existing = db.query(sql_models.Book).filter(sql_models.Book.isbn == book.isbn).first()
+    result = db.execute(
+        text("SELECT id FROM books WHERE isbn = :isbn"),
+        {"isbn": book.isbn}
+    )
+    existing = result.fetchone()
+    
     if existing:
         raise HTTPException(status_code=400, detail="Book with this ISBN already exists")
     
     # Create new book
-    db_book = sql_models.Book(**book.dict(), available_copies=book.total_copies)
-    db.add(db_book)
+    insert_query = text("""
+        INSERT INTO books (
+            isbn, title, author, publisher, publication_year, category, 
+            language, pages, description, cover_image_url, total_copies, 
+            available_copies, location, created_at, updated_at
+        ) VALUES (
+            :isbn, :title, :author, :publisher, :publication_year, :category,
+            :language, :pages, :description, :cover_image_url, :total_copies,
+            :available_copies, :location, :created_at, :updated_at
+        )
+    """)
+    
+    now = datetime.utcnow()
+    params = {
+        "isbn": book.isbn,
+        "title": book.title,
+        "author": book.author,
+        "publisher": book.publisher,
+        "publication_year": book.publication_year,
+        "category": book.category,
+        "language": book.language or "English",
+        "pages": book.pages,
+        "description": book.description,
+        "cover_image_url": book.cover_image_url,
+        "total_copies": book.total_copies,
+        "available_copies": book.total_copies,
+        "location": book.location,
+        "created_at": now,
+        "updated_at": now
+    }
+    
+    db.execute(insert_query, params)
     db.commit()
-    db.refresh(db_book)
+    
+    # Get the inserted book
+    result = db.execute(
+        text("SELECT * FROM books WHERE isbn = :isbn"),
+        {"isbn": book.isbn}
+    )
+    db_book = result.fetchone()
+    book_dict = dict(db_book._mapping)
     
     # Log to MongoDB
     try:
@@ -68,16 +124,16 @@ def create_book(book: schemas.BookCreate, db: Session = Depends(get_db)):
         if logs is not None:
             logs.insert_one({
                 "action": "book_added",
-                "book_id": db_book.id,
-                "book_title": db_book.title,
-                "book_author": db_book.author,
-                "isbn": db_book.isbn,
+                "book_id": book_dict["id"],
+                "book_title": book_dict["title"],
+                "book_author": book_dict["author"],
+                "isbn": book_dict["isbn"],
                 "timestamp": datetime.utcnow()
             })
     except Exception as e:
         print(f"MongoDB logging failed: {e}")
     
-    return db_book
+    return book_dict
 
 
 @router.put("/{book_id}", response_model=schemas.Book)
@@ -85,17 +141,41 @@ def update_book(book_id: int, book: schemas.BookUpdate, db: Session = Depends(ge
     """Update a book"""
     from app.database.mongodb import get_activity_logs_collection
     
-    db_book = db.query(sql_models.Book).filter(sql_models.Book.id == book_id).first()
+    # Check if book exists
+    result = db.execute(
+        text("SELECT * FROM books WHERE id = :book_id"),
+        {"book_id": book_id}
+    )
+    db_book = result.fetchone()
+    
     if not db_book:
         raise HTTPException(status_code=404, detail="Book not found")
     
-    # Update fields
+    # Build dynamic update query
     update_data = book.dict(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(db_book, field, value)
+    if not update_data:
+        return dict(db_book._mapping)
     
+    set_clauses = []
+    params = {"book_id": book_id, "updated_at": datetime.utcnow()}
+    
+    for field, value in update_data.items():
+        set_clauses.append(f"{field} = :{field}")
+        params[field] = value
+    
+    set_clauses.append("updated_at = :updated_at")
+    
+    update_query = text(f"UPDATE books SET {', '.join(set_clauses)} WHERE id = :book_id")
+    db.execute(update_query, params)
     db.commit()
-    db.refresh(db_book)
+    
+    # Get updated book
+    result = db.execute(
+        text("SELECT * FROM books WHERE id = :book_id"),
+        {"book_id": book_id}
+    )
+    updated_book = result.fetchone()
+    book_dict = dict(updated_book._mapping)
     
     # Log to MongoDB
     try:
@@ -103,14 +183,14 @@ def update_book(book_id: int, book: schemas.BookUpdate, db: Session = Depends(ge
         if logs is not None:
             logs.insert_one({
                 "action": "book_updated",
-                "book_id": db_book.id,
-                "book_title": db_book.title,
+                "book_id": book_dict["id"],
+                "book_title": book_dict["title"],
                 "timestamp": datetime.utcnow()
             })
     except Exception as e:
         print(f"MongoDB logging failed: {e}")
     
-    return db_book
+    return book_dict
 
 
 @router.delete("/{book_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -118,22 +198,37 @@ def delete_book(book_id: int, db: Session = Depends(get_db)):
     """Delete a book"""
     from app.database.mongodb import get_activity_logs_collection
     
-    db_book = db.query(sql_models.Book).filter(sql_models.Book.id == book_id).first()
+    # Check if book exists
+    result = db.execute(
+        text("SELECT * FROM books WHERE id = :book_id"),
+        {"book_id": book_id}
+    )
+    db_book = result.fetchone()
+    
     if not db_book:
         raise HTTPException(status_code=404, detail="Book not found")
     
     # Check if book has active transactions
-    active_transactions = db.query(sql_models.Transaction).filter(
-        sql_models.Transaction.book_id == book_id,
-        sql_models.Transaction.status == "checked_out"
-    ).first()
+    result = db.execute(
+        text("""
+            SELECT id FROM transactions 
+            WHERE book_id = :book_id AND status = 'checked_out'
+            LIMIT 1
+        """),
+        {"book_id": book_id}
+    )
+    active_transactions = result.fetchone()
     
     if active_transactions:
         raise HTTPException(status_code=400, detail="Cannot delete book with active checkouts")
     
     book_title = db_book.title  # Save for logging
     
-    db.delete(db_book)
+    # Delete the book
+    db.execute(
+        text("DELETE FROM books WHERE id = :book_id"),
+        {"book_id": book_id}
+    )
     db.commit()
     
     # Log to MongoDB
@@ -155,7 +250,13 @@ def delete_book(book_id: int, db: Session = Depends(get_db)):
 @router.get("/isbn/{isbn}", response_model=schemas.Book)
 def get_book_by_isbn(isbn: str, db: Session = Depends(get_db)):
     """Get book by ISBN"""
-    book = db.query(sql_models.Book).filter(sql_models.Book.isbn == isbn).first()
+    result = db.execute(
+        text("SELECT * FROM books WHERE isbn = :isbn"),
+        {"isbn": isbn}
+    )
+    book = result.fetchone()
+    
     if not book:
         raise HTTPException(status_code=404, detail="Book not found")
-    return book
+    
+    return dict(book._mapping)

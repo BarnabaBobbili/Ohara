@@ -1,18 +1,40 @@
 // Login Page - Editorial Design
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { authAPI } from '../services/api';
+import { setAuthState } from '../services/authStore';
 
 export default function Login() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
     const navigate = useNavigate();
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        // TODO: Implement authentication logic
-        console.log('Login:', { email, password });
-        // Temporary: Navigate to dashboard
-        navigate('/dashboard');
+        setError('');
+        setLoading(true);
+
+        try {
+            // Call login API
+            const response = await authAPI.login({ email, password });
+
+            // Get user info with the token
+            localStorage.setItem('auth_token', response.access_token);
+            const userResponse = await authAPI.getCurrentUser();
+
+            // Save auth state
+            setAuthState(response.access_token, userResponse);
+
+            // Navigate to dashboard
+            navigate('/dashboard');
+        } catch (err) {
+            console.error('Login error:', err);
+            setError(err.message || 'Invalid email or password');
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -65,6 +87,14 @@ export default function Login() {
 
                         {/* Form */}
                         <form onSubmit={handleSubmit} className="space-y-6">
+                            {/* Error Message */}
+                            {error && (
+                                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200 px-4 py-3 rounded-lg text-sm"
+                                    style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                    {error}
+                                </div>
+                            )}
+
                             {/* Email */}
                             <div>
                                 <label
@@ -80,7 +110,8 @@ export default function Login() {
                                     required
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
-                                    className="w-full px-4 py-3 bg-[#FAF7F2] dark:bg-[#1e1614] border border-[#E8E4DF] dark:border-white/10 rounded-lg text-[#1E1815] dark:text-white placeholder:text-[#6B6560]/60 focus:outline-none focus:ring-2 focus:ring-[#c16549]/20 focus:border-[#c16549] transition-all"
+                                    disabled={loading}
+                                    className="w-full px-4 py-3 bg-[#FAF7F2] dark:bg-[#1e1614] border border-[#E8E4DF] dark:border-white/10 rounded-lg text-[#1E1815] dark:text-white placeholder:text-[#6B6560]/60 focus:outline-none focus:ring-2 focus:ring-[#c16549]/20 focus:border-[#c16549] transition-all disabled:opacity-50"
                                     placeholder="reader@example.com"
                                     style={{ fontFamily: "'Noto Sans', sans-serif" }}
                                 />
@@ -101,7 +132,8 @@ export default function Login() {
                                     required
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
-                                    className="w-full px-4 py-3 bg-[#FAF7F2] dark:bg-[#1e1614] border border-[#E8E4DF] dark:border-white/10 rounded-lg text-[#1E1815] dark:text-white placeholder:text-[#6B6560]/60 focus:outline-none focus:ring-2 focus:ring-[#c16549]/20 focus:border-[#c16549] transition-all"
+                                    disabled={loading}
+                                    className="w-full px-4 py-3 bg-[#FAF7F2] dark:bg-[#1e1614] border border-[#E8E4DF] dark:border-white/10 rounded-lg text-[#1E1815] dark:text-white placeholder:text-[#6B6560]/60 focus:outline-none focus:ring-2 focus:ring-[#c16549]/20 focus:border-[#c16549] transition-all disabled:opacity-50"
                                     placeholder="••••••••"
                                     style={{ fontFamily: "'Noto Sans', sans-serif" }}
                                 />
@@ -113,6 +145,7 @@ export default function Login() {
                                     <input
                                         type="checkbox"
                                         className="w-4 h-4 rounded border-[#E8E4DF] text-[#c16549] focus:ring-[#c16549]/20"
+                                        disabled={loading}
                                     />
                                     <span className="text-[#6B6560] dark:text-gray-400 group-hover:text-[#1E1815] dark:group-hover:text-white transition-colors"
                                         style={{ fontFamily: "'Noto Sans', sans-serif" }}>
@@ -130,11 +163,14 @@ export default function Login() {
                             {/* Submit Button */}
                             <button
                                 type="submit"
-                                className="w-full bg-[#c16549] hover:bg-[#a0523b] text-white py-3 rounded-lg font-semibold text-base transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 group"
+                                disabled={loading}
+                                className="w-full bg-[#c16549] hover:bg-[#a0523b] text-white py-3 rounded-lg font-semibold text-base transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 group disabled:opacity-50 disabled:cursor-not-allowed"
                                 style={{ fontFamily: "'Noto Sans', sans-serif" }}
                             >
-                                <span>Sign In</span>
-                                <span className="material-symbols-outlined text-lg group-hover:translate-x-1 transition-transform">arrow_forward</span>
+                                <span>{loading ? 'Signing in...' : 'Sign In'}</span>
+                                {!loading && (
+                                    <span className="material-symbols-outlined text-lg group-hover:translate-x-1 transition-transform">arrow_forward</span>
+                                )}
                             </button>
                         </form>
 

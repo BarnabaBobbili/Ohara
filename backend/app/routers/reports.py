@@ -1,13 +1,12 @@
 """
 Reports API Router
-Analytics and reporting endpoints
+Analytics and reporting endpoints - Using Raw SQL
 """
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from sqlalchemy import func, extract
+from sqlalchemy import text
 from app.database.sql import get_db
 from app.database.mongodb import get_activity_logs_collection
-from app.models import sql_models
 from datetime import datetime, timedelta
 from typing import List, Dict, Any
 
@@ -47,35 +46,39 @@ def get_circulation_stats(db: Session = Depends(get_db)):
     
     # Today's checkouts
     today_start = datetime(now.year, now.month, now.day)
-    today_checkouts = db.query(func.count(sql_models.Transaction.id)).filter(
-        sql_models.Transaction.checkout_date >= today_start
-    ).scalar()
+    result = db.execute(
+        text("SELECT COUNT(*) as count FROM transactions WHERE checkout_date >= :today_start"),
+        {"today_start": today_start}
+    )
+    today_checkouts = result.fetchone().count
     
     # This week's checkouts
     week_start = now - timedelta(days=now.weekday())
-    week_checkouts = db.query(func.count(sql_models.Transaction.id)).filter(
-        sql_models.Transaction.checkout_date >= week_start
-    ).scalar()
+    result = db.execute(
+        text("SELECT COUNT(*) as count FROM transactions WHERE checkout_date >= :week_start"),
+        {"week_start": week_start}
+    )
+    week_checkouts = result.fetchone().count
     
     # This month's checkouts
     month_start = datetime(now.year, now.month, 1)
-    month_checkouts = db.query(func.count(sql_models.Transaction.id)).filter(
-        sql_models.Transaction.checkout_date >= month_start
-    ).scalar()
+    result = db.execute(
+        text("SELECT COUNT(*) as count FROM transactions WHERE checkout_date >= :month_start"),
+        {"month_start": month_start}
+    )
+    month_checkouts = result.fetchone().count
     
     # Average checkout duration
-    returned_transactions = db.query(sql_models.Transaction).filter(
-        sql_models.Transaction.return_date.isnot(None)
-    ).all()
-    
-    if returned_transactions:
-        total_days = sum([
-            (t.return_date - t.checkout_date).days 
-            for t in returned_transactions
-        ])
-        avg_duration = total_days / len(returned_transactions)
-    else:
-        avg_duration = 0
+    result = db.execute(
+        text("""
+            SELECT 
+                AVG(EXTRACT(EPOCH FROM (return_date - checkout_date))/86400) as avg_duration
+            FROM transactions 
+            WHERE return_date IS NOT NULL
+        """)
+    )
+    avg_row = result.fetchone()
+    avg_duration = avg_row.avg_duration if avg_row.avg_duration else 0
     
     return {
         "today_checkouts": today_checkouts,
@@ -88,20 +91,22 @@ def get_circulation_stats(db: Session = Depends(get_db)):
 @router.get("/popular-books")
 def get_popular_books(limit: int = 10, db: Session = Depends(get_db)):
     """Get most borrowed books"""
-    popular = db.query(
-        sql_models.Book.id,
-        sql_models.Book.title,
-        sql_models.Book.author,
-        func.count(sql_models.Transaction.id).label("borrow_count")
-    ).join(
-        sql_models.Transaction
-    ).group_by(
-        sql_models.Book.id,
-        sql_models.Book.title,
-        sql_models.Book.author
-    ).order_by(
-        func.count(sql_models.Transaction.id).desc()
-    ).limit(limit).all()
+    result = db.execute(
+        text("""
+            SELECT 
+                b.id,
+                b.title,
+                b.author,
+                COUNT(t.id) as borrow_count
+            FROM books b
+            JOIN transactions t ON b.id = t.book_id
+            GROUP BY b.id, b.title, b.author
+            ORDER BY borrow_count DESC
+            LIMIT :limit
+        """),
+        {"limit": limit}
+    )
+    popular = result.fetchall()
     
     return [
         {
@@ -117,12 +122,16 @@ def get_popular_books(limit: int = 10, db: Session = Depends(get_db)):
 @router.get("/category-distribution")
 def get_category_distribution(db: Session = Depends(get_db)):
     """Get book distribution by category"""
-    categories = db.query(
-        sql_models.Book.category,
-        func.count(sql_models.Book.id).label("count")
-    ).group_by(
-        sql_models.Book.category
-    ).all()
+    result = db.execute(
+        text("""
+            SELECT 
+                category,
+                COUNT(id) as count
+            FROM books
+            GROUP BY category
+        """)
+    )
+    categories = result.fetchall()
     
     return [
         {"category": cat.category or "Uncategorized", "count": cat.count}
@@ -133,16 +142,21 @@ def get_category_distribution(db: Session = Depends(get_db)):
 @router.get("/member-stats")
 def get_member_stats(db: Session = Depends(get_db)):
     """Get member statistics by type"""
-    member_types = db.query(
-        sql_models.Member.member_type,
-        func.count(sql_models.Member.id).label("count")
-    ).group_by(
-        sql_models.Member.member_type
-    ).all()
+    result = db.execute(
+        text("""
+            SELECT 
+                member_type,
+                COUNT(id) as count
+            FROM members
+            GROUP BY member_type
+        """)
+    )
+    member_types = result.fetchall()
     
-    active_members = db.query(func.count(sql_models.Member.id)).filter(
-        sql_models.Member.status == "active"
-    ).scalar()
+    result = db.execute(
+        text("SELECT COUNT(*) as count FROM members WHERE status = 'active'")
+    )
+    active_members = result.fetchone().count
     
     return {
         "by_type": [
@@ -157,23 +171,28 @@ def get_member_stats(db: Session = Depends(get_db)):
 def get_fine_report(db: Session = Depends(get_db)):
     """Get fine collection report"""
     # Total outstanding fines
-    outstanding = db.query(func.sum(sql_models.Member.fines)).scalar() or 0
+    result = db.execute(
+        text("SELECT SUM(fines) as total FROM members")
+    )
+    outstanding = result.fetchone().total or 0
     
     # Collected fines (from paid transactions)
-    collected = db.query(func.sum(sql_models.Transaction.fine_amount)).filter(
-        sql_models.Transaction.fine_paid == True
-    ).scalar() or 0
+    result = db.execute(
+        text("SELECT SUM(fine_amount) as total FROM transactions WHERE fine_paid = TRUE")
+    )
+    collected = result.fetchone().total or 0
     
     # Unpaid fines
-    unpaid = db.query(func.sum(sql_models.Transaction.fine_amount)).filter(
-        sql_models.Transaction.fine_paid == False,
-        sql_models.Transaction.fine_amount > 0
-    ).scalar() or 0
+    result = db.execute(
+        text("SELECT SUM(fine_amount) as total FROM transactions WHERE fine_paid = FALSE AND fine_amount > 0")
+    )
+    unpaid = result.fetchone().total or 0
     
     # Members with fines
-    members_with_fines = db.query(func.count(sql_models.Member.id)).filter(
-        sql_models.Member.fines > 0
-    ).scalar()
+    result = db.execute(
+        text("SELECT COUNT(*) as count FROM members WHERE fines > 0")
+    )
+    members_with_fines = result.fetchone().count
     
     return {
         "outstanding_fines": round(outstanding, 2),
@@ -189,18 +208,26 @@ def get_monthly_trend(db: Session = Depends(get_db)):
     now = datetime.utcnow()
     six_months_ago = now - timedelta(days=180)
     
-    monthly_data = db.query(
-        extract('year', sql_models.Transaction.checkout_date).label('year'),
-        extract('month', sql_models.Transaction.checkout_date).label('month'),
-        func.count(sql_models.Transaction.id).label('count')
-    ).filter(
-        sql_models.Transaction.checkout_date >= six_months_ago
-    ).group_by('year', 'month').order_by('year', 'month').all()
+    # PostgreSQL date extraction
+    result = db.execute(
+        text("""
+            SELECT 
+                EXTRACT(YEAR FROM checkout_date)::INTEGER as year,
+                EXTRACT(MONTH FROM checkout_date)::INTEGER as month,
+                COUNT(id) as count
+            FROM transactions
+            WHERE checkout_date >= :six_months_ago
+            GROUP BY year, month
+            ORDER BY year, month
+        """),
+        {"six_months_ago": six_months_ago}
+    )
+    monthly_data = result.fetchall()
     
     return [
         {
-            "year": int(row.year),
-            "month": int(row.month),
+            "year": row.year,
+            "month": row.month,
             "checkouts": row.count
         }
         for row in monthly_data

@@ -1,16 +1,16 @@
 """
 SQLite Database Connection with SQLAlchemy
 """
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from app.config import settings
 
-# Create SQLite engine
+# Create database engine (works with both SQLite and PostgreSQL)
 engine = create_engine(
     settings.DATABASE_URL,
-    connect_args={"check_same_thread": False},  # Needed for SQLite
-    echo=False  # Set to True for SQL query logging
+    echo=False,  # Set to True for SQL query logging
+    pool_pre_ping=True  # Verify connections before using them
 )
 
 # Create SessionLocal class

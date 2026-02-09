@@ -51,6 +51,9 @@ class Member(Base):
     phone = Column(String(20))
     address = Column(Text)
     
+    # Authentication
+    password_hash = Column(String(255))
+    
     # Member Details
     member_type = Column(String(50), nullable=False)  # student, faculty, public
     status = Column(String(20), default="active")  # active, suspended, inactive
@@ -155,3 +158,57 @@ class Staff(Base):
     
     # Relationships
     transactions = relationship("Transaction", back_populates="staff")
+
+
+class ExternalBookCache(Base):
+    """Cache for external book metadata"""
+    __tablename__ = "external_book_cache"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    source = Column(String(50), index=True, nullable=False)  # 'openlibrary', 'gutenberg', 'internet_archive'
+    source_id = Column(String(100), index=True, nullable=False)  # ID within that source
+    isbn = Column(String(13), index=True)
+    title = Column(String(500))
+    author = Column(String(500))
+    cover_url = Column(String(1000))
+    description = Column(Text)
+    subjects = Column(Text)  # JSON array
+    formats_available = Column(Text)  # JSON: {epub: url, pdf: url, ...}
+    is_public_domain = Column(Boolean, default=False)
+    can_borrow = Column(Boolean, default=False)
+    cached_at = Column(DateTime, default=datetime.utcnow)
+
+
+class UserUploadedBook(Base):
+    """User's personal uploaded books"""
+    __tablename__ = "user_uploaded_books"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    member_id = Column(Integer, ForeignKey("members.id"), nullable=False)
+    title = Column(String(500), nullable=False)
+    author = Column(String(500))
+    file_path = Column(String(1000), nullable=False)  # Local path
+    file_format = Column(String(10))  # 'epub', 'pdf'
+    file_size = Column(Integer)  # bytes
+    cover_path = Column(String(1000))
+    uploaded_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationship
+    member = relationship("Member")
+
+
+class ReadingProgress(Base):
+    """Track user reading progress across all sources"""
+    __tablename__ = "reading_progress"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    member_id = Column(Integer, ForeignKey("members.id"), nullable=False)
+    book_type = Column(String(20), nullable=False)  # 'local', 'external', 'uploaded'
+    book_id = Column(String(100), nullable=False)  # Can be local ID or external source:id
+    current_location = Column(Text)  # EPUB CFI or PDF page number
+    progress_percent = Column(Float, default=0)
+    last_read_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationship
+    member = relationship("Member")
+

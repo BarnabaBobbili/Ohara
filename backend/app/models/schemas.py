@@ -203,3 +203,112 @@ class DashboardStats(BaseModel):
     total_fines: float
     books_available: int
     new_members_this_month: int
+
+
+# ============= External Book Schemas =============
+
+class ExternalBookResult(BaseModel):
+    """Schema for external book search result"""
+    source: str
+    source_id: str
+    title: str
+    author: Optional[str]
+    cover_url: Optional[str]
+    is_public_domain: bool
+    can_borrow: bool
+    formats: list[str]  # ['epub', 'pdf', 'txt']
+
+
+class UnifiedSearchResponse(BaseModel):
+    """Schema for unified search response"""
+    query: str
+    total_results: int
+    results: list[ExternalBookResult]
+    sources_searched: list[str]
+
+
+# ============= User Upload Schemas =============
+
+class UploadedBookCreate(BaseModel):
+    """Schema for creating uploaded book"""
+    title: str
+    author: Optional[str] = None
+
+
+class UploadedBook(BaseModel):
+    """Schema for uploaded book response"""
+    id: int
+    title: str
+    author: Optional[str]
+    file_format: str
+    file_size: int
+    cover_url: Optional[str]
+    uploaded_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+# ============= Reading Progress Schemas =============
+
+class ReadingProgressUpdate(BaseModel):
+    """Schema for updating reading progress"""
+    current_location: str
+    progress_percent: float
+
+
+class ReadingProgress(BaseModel):
+    """Schema for reading progress response"""
+    id: int
+    book_type: str
+    book_id: str
+    current_location: str
+    progress_percent: float
+    last_read_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+# ============= Authentication Schemas =============
+
+class UserSignup(BaseModel):
+    """Schema for user registration"""
+    name: str = Field(..., min_length=1, max_length=255)
+    email: EmailStr
+    password: str = Field(..., min_length=8, max_length=100)
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    member_type: str = Field(default="public", pattern="^(student|faculty|public)$")
+    library_card: Optional[str] = None
+
+
+class UserLogin(BaseModel):
+    """Schema for user login"""
+    email: EmailStr
+    password: str
+
+
+class Token(BaseModel):
+    """Schema for JWT token response"""
+    access_token: str
+    token_type: str = "bearer"
+
+
+class UserResponse(BaseModel):
+    """Schema for user data response (no sensitive info)"""
+    id: int
+    card_id: str
+    name: str
+    email: EmailStr
+    phone: Optional[str]
+    address: Optional[str]
+    member_type: str
+    status: str
+    fines: float
+    joined_date: datetime
+    expiry_date: Optional[datetime]
+    
+    class Config:
+        from_attributes = True
+

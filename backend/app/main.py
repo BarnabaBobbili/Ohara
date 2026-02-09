@@ -55,6 +55,13 @@ async def startup_event():
         connect_neo4j()
     except Exception as e:
         logger.warning(f"Neo4j not connected (optional): {e}")
+    
+    # Create upload directories for book sources
+    import os
+    os.makedirs("uploads/user_books", exist_ok=True)
+    os.makedirs("cache/books", exist_ok=True)
+    os.makedirs("cache/covers", exist_ok=True)
+    logger.info("✓ Upload directories created")
 
 
 @app.on_event("shutdown")
@@ -95,14 +102,17 @@ async def health_check():
 
 
 # Import routers
-from app.routers import books, members, circulation, dashboard, reports
+from app.routers import books, members, circulation, dashboard, reports, external_books, user_library, auth
 
 # Include routers
+app.include_router(auth.router, prefix=settings.API_V1_PREFIX)
 app.include_router(books.router, prefix=settings.API_V1_PREFIX)
 app.include_router(members.router, prefix=settings.API_V1_PREFIX)
 app.include_router(circulation.router, prefix=settings.API_V1_PREFIX)
 app.include_router(dashboard.router, prefix=settings.API_V1_PREFIX)
 app.include_router(reports.router, prefix=settings.API_V1_PREFIX)
+app.include_router(external_books.router, prefix=settings.API_V1_PREFIX)
+app.include_router(user_library.router, prefix=settings.API_V1_PREFIX)
 
 
 if __name__ == "__main__":

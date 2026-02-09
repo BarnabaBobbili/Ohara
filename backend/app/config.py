@@ -1,6 +1,6 @@
 from pydantic_settings import BaseSettings
 from pydantic import ConfigDict
-from typing import List
+from typing import List, Optional
 
 
 class Settings(BaseSettings):
@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     
     # CORS
     ALLOWED_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
+    
+    # External APIs
+    GOOGLE_BOOKS_API_KEY: Optional[str] = None
     
     # JWT Authentication
     SECRET_KEY: str = "your-secret-key-change-this-in-production"
