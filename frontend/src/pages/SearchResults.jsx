@@ -2,8 +2,9 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
+import { BACKEND_ORIGIN } from '../config/api';
 
-const BACKEND_URL = 'http://localhost:8000';
+const BACKEND_URL = BACKEND_ORIGIN;
 
 export default function SearchResults() {
     const [searchParams] = useSearchParams();

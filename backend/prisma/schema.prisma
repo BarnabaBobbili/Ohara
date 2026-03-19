@@ -1,0 +1,156 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model books {
+  id               Int            @id @default(autoincrement())
+  isbn             String         @unique
+  title            String
+  author           String
+  publisher        String?
+  publication_year Int?
+  category         String?
+  language         String?        @default("English")
+  pages            Int?
+  description      String?
+  cover_image_url  String?
+  total_copies     Int            @default(1)
+  available_copies Int            @default(1)
+  location         String?
+  created_at       DateTime       @default(now())
+  updated_at       DateTime       @updatedAt
+  transactions     transactions[]
+  reservations     reservations[]
+
+  @@index([category])
+  @@index([author])
+  @@index([updated_at])
+}
+
+model members {
+  id                    Int                    @id @default(autoincrement())
+  card_id               String                 @unique
+  name                  String
+  email                 String                 @unique
+  phone                 String?
+  address               String?
+  password_hash         String?
+  member_type           String
+  status                String                 @default("active")
+  fines                 Float                  @default(0.0)
+  joined_date           DateTime               @default(now())
+  expiry_date           DateTime?
+  last_visit            DateTime?
+  transactions          transactions[]
+  reservations          reservations[]
+  user_uploaded_books   user_uploaded_books[]
+  reading_progress      reading_progress[]
+
+  @@index([status])
+  @@index([member_type])
+  @@index([joined_date])
+}
+
+model transactions {
+  id                 Int       @id @default(autoincrement())
+  book_id            Int
+  member_id          Int
+  staff_id           Int?
+  checkout_date      DateTime  @default(now())
+  due_date           DateTime
+  return_date        DateTime?
+  status             String    @default("checked_out")
+  checkout_condition String?   @default("good")
+  return_condition   String?
+  fine_amount        Float     @default(0.0)
+  fine_paid          Boolean   @default(false)
+  notes              String?
+  book               books     @relation(fields: [book_id], references: [id])
+  member             members   @relation(fields: [member_id], references: [id])
+  staff_rel          staff?    @relation(fields: [staff_id], references: [id])
+
+  @@index([book_id])
+  @@index([member_id])
+  @@index([status])
+  @@index([checkout_date])
+  @@index([due_date])
+  @@index([status, due_date])
+  @@index([member_id, status])
+}
+
+model reservations {
+  id               Int       @id @default(autoincrement())
+  book_id          Int
+  member_id        Int
+  reservation_date DateTime  @default(now())
+  expiry_date      DateTime?
+  status           String    @default("pending")
+  notified         Boolean   @default(false)
+  book             books     @relation(fields: [book_id], references: [id])
+  member           members   @relation(fields: [member_id], references: [id])
+
+  @@index([status])
+}
+
+model staff {
+  id            Int            @id @default(autoincrement())
+  staff_id      String         @unique
+  name          String
+  email         String         @unique
+  phone         String?
+  password_hash String
+  role          String
+  permissions   String?
+  status        String         @default("active")
+  hired_date    DateTime       @default(now())
+  last_login    DateTime?
+  transactions  transactions[]
+}
+
+model external_book_cache {
+  id                Int      @id @default(autoincrement())
+  source            String
+  source_id         String
+  isbn              String?
+  title             String?
+  author            String?
+  cover_url         String?
+  description       String?
+  subjects          String?
+  formats_available String?
+  is_public_domain  Boolean  @default(false)
+  can_borrow        Boolean  @default(false)
+  cached_at         DateTime @default(now())
+
+  @@unique([source, source_id])
+  @@index([cached_at])
+}
+
+model user_uploaded_books {
+  id          Int      @id @default(autoincrement())
+  member_id   Int
+  title       String
+  author      String?
+  file_path   String
+  file_format String?
+  file_size   Int?
+  cover_path  String?
+  uploaded_at DateTime @default(now())
+  member      members  @relation(fields: [member_id], references: [id])
+}
+
+model reading_progress {
+  id               Int      @id @default(autoincrement())
+  member_id        Int
+  book_type        String
+  book_id          String
+  current_location String?
+  progress_percent Float    @default(0)
+  last_read_at     DateTime @default(now())
+  member           members  @relation(fields: [member_id], references: [id])
+}

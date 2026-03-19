@@ -15,6 +15,7 @@ export default function AdminLayout() {
         { path: '/admin/books', icon: 'inventory_2', label: 'The Archives' },
         { path: '/admin/circulation', icon: 'sync_alt', label: 'Circulation' },
         { path: '/admin/members', icon: 'person_search', label: 'Patrons' },
+        { path: '/admin/audit-trail', icon: 'history', label: 'Audit Trail' },
         { path: '/admin/reports', icon: 'bar_chart', label: 'Analytics' },
         { path: '/admin/settings', icon: 'settings', label: 'Configuration' },
     ];

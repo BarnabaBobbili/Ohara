@@ -1,79 +1,51 @@
 # Library Management System
 
-A modern library management system with multi-database architecture.
+Multi-database library system with a React frontend and a Node/Express backend.
 
-## Project Structure
+## Active Stack
 
-```
-Library Management System/
-├── frontend/               # React + Vite frontend
-│   ├── src/
-│   │   ├── pages/         # Page components
-│   │   ├── components/    # Reusable components
-│   │   ├── layouts/       # Layout components
-│   │   └── ...
-│   ├── public/
-│   └── package.json
-│
-├── backend/               # FastAPI backend
-│   ├── app/
-│   │   ├── database/      # Database connections
-│   │   ├── models/        # Data models
-│   │   ├── routers/       # API endpoints
-│   │   └── services/      # Business logic
-│   └── requirements.txt
-│
-└── docs/                  # Documentation
+- `frontend/`: React + Vite UI
+- `backend-node/`: Express API (main backend)
+- Databases:
+  - PostgreSQL for core library data
+  - MongoDB Atlas for activity logs
+  - MySQL (Aiven) for audit trail
+  - Neo4j for graph features
 
-```
+## Run Locally
 
-## Frontend Setup
+1. Install dependencies:
+   - `cd backend-node && npm install`
+   - `cd frontend && npm install`
+2. Start both services:
+   - Use `start.bat`
+   - Or run manually:
+     - `cd backend-node && npm run dev`
+     - `cd frontend && npm run dev`
 
-```bash
-cd frontend
-npm install
-npm run dev
-```
+## Default URLs
 
-Frontend runs on: `http://localhost:5173`
+- Backend: `http://localhost:8000`
+- Frontend: `http://localhost:5173`
 
-## Backend Setup
+## Frontend API Config
 
-```bash
-cd backend
-python -m venv venv
-venv\Scripts\activate  # Windows
-pip install -r requirements.txt
-uvicorn app.main:app --reload
-```
+Set these in `frontend/.env` if needed:
 
-Backend runs on: `http://localhost:8000`
+- `VITE_BACKEND_ORIGIN=http://localhost:8000`
+- `VITE_API_BASE_URL=http://localhost:8000/api`
 
-API Docs: `http://localhost:8000/docs`
+## Prisma (Backend)
 
-## Databases
+Use migration-first workflow (not `db push`) from `backend-node/`:
 
-- **SQLite**: Transactional data (books, members, transactions)
-- **MongoDB**: Document store (activity logs, analytics)
-- **Neo4j**: Graph database (recommendations, relationships)
+- Create migration: `npm.cmd run prisma:migrate:dev -- --name <change_name>`
+- Deploy migrations: `npm.cmd run prisma:migrate:deploy`
+- Check migration state: `npm.cmd run prisma:migrate:status`
 
-## Technologies
+Set both runtime and migration DB URLs in `backend-node/.env`:
 
-### Frontend
-- React 19
-- Vite
-- React Router
-- Tailwind CSS
+- `DATABASE_URL` (pooled runtime URL)
+- `DIRECT_DATABASE_URL` (direct URL for migrations)
 
-### Backend
-- FastAPI
-- SQLAlchemy (SQLite)
-- PyMongo (MongoDB)
-- Neo4j Driver
-
-## Development
-
-1. Start MongoDB (optional): `mongod`
-2. Start Neo4j (optional): `neo4j start`
-3. Start backend: `cd backend && uvicorn app.main:app --reload`
-4. Start frontend: `cd frontend && npm run dev`
+More details: `backend-node/README.md`

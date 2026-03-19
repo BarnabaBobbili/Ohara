@@ -21,6 +21,7 @@ import MemberManagement from './pages/admin/MemberManagement';
 import CirculationDesk from './pages/admin/CirculationDesk';
 import Reports from './pages/admin/Reports';
 import Settings from './pages/admin/Settings';
+import AuditTrail from './pages/admin/AuditTrail';
 
 import './index.css';
 
@@ -52,6 +53,7 @@ function App() {
           <Route path="books" element={<BookManagement />} />
           <Route path="members" element={<MemberManagement />} />
           <Route path="circulation" element={<CirculationDesk />} />
+          <Route path="audit-trail" element={<AuditTrail />} />
           <Route path="reports" element={<Reports />} />
           <Route path="settings" element={<Settings />} />
         </Route>

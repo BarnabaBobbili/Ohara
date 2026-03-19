@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaBook, FaSearch, FaFilter, FaSortAmountDown } from 'react-icons/fa';
 import Header from '../components/Header';
+import { BACKEND_ORIGIN } from '../config/api';
 
-const BACKEND_URL = 'http://localhost:8000';
+const BACKEND_URL = BACKEND_ORIGIN;
 
 export default function BookCatalog() {
     const [books, setBooks] = useState([]);

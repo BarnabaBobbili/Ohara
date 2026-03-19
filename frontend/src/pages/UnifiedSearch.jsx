@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { FaSearch, FaBook, FaSpinner } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
+import { BACKEND_ORIGIN } from '../config/api';
 
-const BACKEND_URL = 'http://localhost:8000';
+const BACKEND_URL = BACKEND_ORIGIN;
 
 const UnifiedSearch = () => {
     const [query, setQuery] = useState('');

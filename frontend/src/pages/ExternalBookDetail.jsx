@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { FaArrowLeft, FaBook, FaDownload, FaSpinner } from 'react-icons/fa';
+import { BACKEND_ORIGIN } from '../config/api';
 
-const BACKEND_URL = 'http://localhost:8000';
+const BACKEND_URL = BACKEND_ORIGIN;
 
 const ExternalBookDetail = () => {
     const { source, sourceId } = useParams();

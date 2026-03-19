@@ -2,8 +2,7 @@
  * API Service Layer
  * Handles all HTTP requests to the backend
  */
-
-const API_BASE_URL = 'http://localhost:8000/api';
+import { API_BASE_URL, BACKEND_ORIGIN } from '../config/api';
 
 /**
  * Generic fetch wrapper with error handling
@@ -136,15 +135,25 @@ export const reportsAPI = {
 
     getMemberStats: () => fetchAPI('/reports/member-stats'),
 
-    getFineReport: () => fetchAPI('/reports/fine-report'),
+    getFineReport: () => fetchAPI('/reports/fines'),
 
     getMonthlyTrend: () => fetchAPI('/reports/monthly-trend'),
+};
+
+// ============= Audit Trail API =============
+
+export const auditAPI = {
+    getBookAudit: (bookId, limit = 100) => fetchAPI(`/audit/books/${bookId}?limit=${limit}`),
+
+    getAllAudits: (limit = 100, offset = 0) => fetchAPI(`/audit/all?limit=${limit}&offset=${offset}`),
+
+    getAuditsByAction: (action, limit = 100) => fetchAPI(`/audit/action/${action}?limit=${limit}`),
 };
 
 // ============= Health Check =============
 
 export const healthAPI = {
-    check: () => fetch('http://localhost:8000/health').then(r => r.json()),
+    check: () => fetch(`${BACKEND_ORIGIN}/health`).then(r => r.json()),
 };
 
 // ============= Authentication API =============
@@ -179,6 +188,7 @@ export default {
     circulation: circulationAPI,
     dashboard: dashboardAPI,
     reports: reportsAPI,
+    audit: auditAPI,
     health: healthAPI,
     auth: authAPI,
 };

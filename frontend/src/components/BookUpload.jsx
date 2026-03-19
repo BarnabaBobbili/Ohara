@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { FaUpload, FaFile, FaCheckCircle, FaTimesCircle } from 'react-icons/fa';
+import { BACKEND_ORIGIN } from '../config/api';
 
-const BACKEND_URL = 'http://localhost:8000';
+const BACKEND_URL = BACKEND_ORIGIN;
 
 const BookUpload = ({ memberId, onUploadSuccess }) => {
     const [selectedFile, setSelectedFile] = useState(null);

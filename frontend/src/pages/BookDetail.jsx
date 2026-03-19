@@ -3,8 +3,9 @@ import { useParams, useLocation } from 'react-router-dom';
 import Header from '../components/Header';
 import GoogleBooksViewer from '../components/GoogleBooksViewer';
 import EpubReader from '../components/EpubReader';
+import { BACKEND_ORIGIN } from '../config/api';
 
-const BACKEND_URL = 'http://localhost:8000';
+const BACKEND_URL = BACKEND_ORIGIN;
 
 export default function BookDetail() {
     const { id } = useParams();
