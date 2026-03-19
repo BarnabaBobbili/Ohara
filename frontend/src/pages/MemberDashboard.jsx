@@ -1,7 +1,27 @@
 // Member Dashboard - Exact copy from Stitch reader's_personal_sanctuary_dashboard
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
+import { getAuthState } from '../services/authStore';
 
 export default function MemberDashboard() {
+    const [authState, setAuthState] = useState(getAuthState());
+    const navigate = useNavigate();
+
+    // Check authentication on mount
+    useEffect(() => {
+        const state = getAuthState();
+        if (!state.isAuthenticated) {
+            navigate('/login');
+        } else {
+            setAuthState(state);
+        }
+    }, [navigate]);
+
+    // Extract first name from full name for greeting
+    const firstName = authState.user?.name?.split(' ')[0] || 'User';
+    const greeting = 'Good evening'; // Could be dynamic based on time of day
+
     return (
         <>
             <style>
@@ -31,64 +51,16 @@ export default function MemberDashboard() {
             <div className="flex h-screen w-full overflow-hidden bg-[#fdfbf7] dark:bg-[#111621] text-[#1e293b] dark:text-gray-100 transition-colors duration-300 pt-24"
                 style={{ fontFamily: "'Epilogue', 'Noto Sans', sans-serif" }}>
 
-                {/* Sidebar Navigation */}
-                <aside className="hidden md:flex flex-col w-72 h-full bg-[#f7f5f0] dark:bg-[#1a202c] border-r border-[#eaddcf] dark:border-gray-800 p-6 justify-between">
-                    <div className="flex flex-col gap-8">
-                        {/* Logo / Brand */}
-                        <div className="flex items-center gap-3 px-2">
-                            <div className="bg-[#2463eb]/10 p-2 rounded-xl text-[#2463eb]">
-                                <span className="material-symbols-outlined text-3xl">local_library</span>
-                            </div>
-                            <span className="text-xl font-bold tracking-tight text-[#1e293b] dark:text-white">Sanctuary</span>
-                        </div>
+                {/* Removed sidebar - now full width main content */}
 
-                        {/* Nav Items */}
-                        <nav className="flex flex-col gap-2">
-                            <a className="flex items-center gap-4 px-4 py-3 rounded-xl bg-white dark:bg-gray-800 shadow-sm text-[#2463eb] font-medium transition-all group" href="#">
-                                <span className="material-symbols-outlined group-hover:scale-110 transition-transform" style={{ fontVariationSettings: "'FILL' 1" }}>dashboard</span>
-                                <span>Dashboard</span>
-                            </a>
-                            <a className="flex items-center gap-4 px-4 py-3 rounded-xl text-gray-500 dark:text-gray-400 hover:bg-white/50 dark:hover:bg-gray-800 hover:text-[#1e293b] dark:hover:text-white transition-all font-medium group" href="#">
-                                <span className="material-symbols-outlined group-hover:scale-110 transition-transform">shelves</span>
-                                <span>My Shelves</span>
-                            </a>
-                            <a className="flex items-center gap-4 px-4 py-3 rounded-xl text-gray-500 dark:text-gray-400 hover:bg-white/50 dark:hover:bg-gray-800 hover:text-[#1e293b] dark:hover:text-white transition-all font-medium group" href="#">
-                                <span className="material-symbols-outlined group-hover:scale-110 transition-transform">schedule</span>
-                                <span>Reservations</span>
-                            </a>
-                            <a className="flex items-center gap-4 px-4 py-3 rounded-xl text-gray-500 dark:text-gray-400 hover:bg-white/50 dark:hover:bg-gray-800 hover:text-[#1e293b] dark:hover:text-white transition-all font-medium group" href="#">
-                                <span className="material-symbols-outlined group-hover:scale-110 transition-transform">groups</span>
-                                <span>Community</span>
-                            </a>
-                        </nav>
-                    </div>
-
-                    {/* User Mini Profile */}
-                    <div className="flex items-center gap-3 px-2 py-3 border-t border-[#eaddcf] dark:border-gray-700 pt-6">
-                        <div className="relative">
-                            <div className="bg-center bg-no-repeat bg-cover rounded-full h-10 w-10 border-2 border-white dark:border-gray-700 shadow-sm"
-                                style={{ backgroundImage: "url('https://lh3.googleusercontent.com/aida-public/AB6AXuDGqboTs0UYra7OM3Yp_uR5MY7mjFw1jhe1qNR58vwwz3W_R2o0ZIakwhQkzCdNobgnVV6XfaUbe3_DCmbCbty6DbLKRESwt6FKnmQUEWlfbutR3nF4sNh9AV-XWNw4Mfm9rDgVNwqQI1Z61px6S5do0tlEVOJkbM70y8_A-A9jW5OojL3gRo0EmIOnZyMJBDEUskP5spb8GK4K9jfGJmF4HRxablcvpyyQEvZHKylvzREKFzl0sVjowtlPFBC7E_irmQa1XT2J2OIM')" }}>
-                            </div>
-                            <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white dark:border-gray-800 rounded-full"></div>
-                        </div>
-                        <div className="flex flex-col">
-                            <span className="text-sm font-semibold text-[#1e293b] dark:text-white">Clara M.</span>
-                            <span className="text-xs text-gray-500 dark:text-gray-400">Premium Reader</span>
-                        </div>
-                        <button className="ml-auto text-gray-400 hover:text-[#2463eb] transition-colors">
-                            <span className="material-symbols-outlined text-[20px]">settings</span>
-                        </button>
-                    </div>
-                </aside>
-
-                {/* Main Content Area */}
+                {/* Main Content Area - Full Width without sidebar */}
                 <main className="flex-1 h-full overflow-y-auto overflow-x-hidden p-6 md:p-12 relative">
-                    <div className="max-w-[1200px] mx-auto flex flex-col gap-10">
+                    <div className="max-w-[1400px] mx-auto flex flex-col gap-10">
                         {/* Page Heading & Context */}
                         <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
                             <div className="flex flex-col gap-2">
                                 <h1 className="text-3xl md:text-5xl font-bold text-[#1e293b] dark:text-white leading-tight tracking-tight">
-                                    Good evening, Clara.
+                                    {greeting}, {firstName}.
                                 </h1>
                                 <p className="text-gray-500 dark:text-gray-400 text-lg font-light flex items-center gap-2">
                                     <span className="material-symbols-outlined text-orange-300">local_cafe</span>

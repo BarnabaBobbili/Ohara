@@ -10,8 +10,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "epubjs": "^0.3.93",
+    "pdfjs-dist": "^4.0.379",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "react-icons": "^5.0.1",
     "react-router-dom": "^7.12.0"
   },
   "devDependencies": {

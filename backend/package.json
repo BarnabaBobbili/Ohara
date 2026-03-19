@@ -1,0 +1,47 @@
+{
+    "name": "library-management-api",
+    "version": "1.0.0",
+    "description": "Library Management System - Node.js/Express Backend",
+    "main": "src/index.js",
+    "type": "module",
+    "scripts": {
+        "dev": "nodemon src/index.js",
+        "start": "node --experimental-strip-types src/index.js",
+        "postinstall": "prisma generate",
+        "prisma:generate": "prisma generate",
+        "prisma:validate": "prisma validate",
+        "prisma:format": "prisma format",
+        "prisma:push": "prisma db push",
+        "prisma:migrate:dev": "prisma migrate dev",
+        "prisma:migrate:deploy": "prisma migrate deploy",
+        "prisma:migrate:status": "prisma migrate status",
+        "prisma:studio": "prisma studio"
+    },
+    "keywords": [
+        "library",
+        "management",
+        "express",
+        "postgresql"
+    ],
+    "author": "",
+    "license": "MIT",
+    "dependencies": {
+        "@prisma/adapter-pg": "^7.4.0",
+        "@prisma/client": "^7.4.0",
+        "axios": "^1.13.5",
+        "bcryptjs": "^2.4.3",
+        "cors": "^2.8.5",
+        "dotenv": "^16.3.1",
+        "express": "^4.18.2",
+        "jsonwebtoken": "^9.0.2",
+        "mongodb": "^7.1.0",
+        "multer": "^2.0.2",
+        "mysql2": "^3.11.0",
+        "neo4j-driver": "^6.0.1",
+        "pg": "^8.11.3"
+    },
+    "devDependencies": {
+        "nodemon": "^3.0.2",
+        "prisma": "^7.4.0"
+    }
+}

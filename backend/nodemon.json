@@ -1,0 +1,12 @@
+{
+    "watch": [
+        "src"
+    ],
+    "ext": "js,ts,json",
+    "ignore": [
+        "src/generated/**"
+    ],
+    "execMap": {
+        "js": "node --experimental-strip-types"
+    }
+}

@@ -1,6 +1,8 @@
 // Signup Page - Editorial Design
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { authAPI } from '../services/api';
+import { setAuthState } from '../services/authStore';
 
 export default function Signup() {
     const [formData, setFormData] = useState({
@@ -8,9 +10,13 @@ export default function Signup() {
         email: '',
         password: '',
         confirmPassword: '',
-        libraryCard: '',
+        phone: '',
+        address: '',
+        memberType: 'public',
         agreeToTerms: false
     });
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
     const navigate = useNavigate();
 
     const handleChange = (e) => {
@@ -21,16 +27,57 @@ export default function Signup() {
         }));
     };
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        // TODO: Implement signup logic
+        setError('');
+
+        // Validation
         if (formData.password !== formData.confirmPassword) {
-            alert('Passwords do not match!');
+            setError('Passwords do not match!');
             return;
         }
-        console.log('Signup:', formData);
-        // Temporary: Navigate to dashboard
-        navigate('/dashboard');
+
+        if (formData.password.length < 8) {
+            setError('Password must be at least 8 characters long');
+            return;
+        }
+
+        if (!formData.agreeToTerms) {
+            setError('You must agree to the Terms of Service and Privacy Policy');
+            return;
+        }
+
+        setLoading(true);
+
+        try {
+            // Prepare user data for API
+            const userData = {
+                name: formData.fullName,
+                email: formData.email,
+                password: formData.password,
+                phone: formData.phone || null,
+                address: formData.address || null,
+                member_type: formData.memberType,
+            };
+
+            // Call signup API
+            const response = await authAPI.signup(userData);
+
+            // Get user info with the token
+            localStorage.setItem('auth_token', response.access_token);
+            const userResponse = await authAPI.getCurrentUser();
+
+            // Save auth state
+            setAuthState(response.access_token, userResponse);
+
+            // Navigate to dashboard
+            navigate('/dashboard');
+        } catch (err) {
+            console.error('Signup error:', err);
+            setError(err.message || 'Failed to create account. Please try again.');
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -83,6 +130,14 @@ export default function Signup() {
 
                         {/* Form */}
                         <form onSubmit={handleSubmit} className="space-y-5">
+                            {/* Error Message */}
+                            {error && (
+                                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200 px-4 py-3 rounded-lg text-sm"
+                                    style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                    {error}
+                                </div>
+                            )}
+
                             {/* Full Name */}
                             <div>
                                 <label
@@ -99,7 +154,8 @@ export default function Signup() {
                                     required
                                     value={formData.fullName}
                                     onChange={handleChange}
-                                    className="w-full px-4 py-3 bg-[#FAF7F2] dark:bg-[#1e1614] border border-[#E8E4DF] dark:border-white/10 rounded-lg text-[#1E1815] dark:text-white placeholder:text-[#6B6560]/60 focus:outline-none focus:ring-2 focus:ring-[#c16549]/20 focus:border-[#c16549] transition-all"
+                                    disabled={loading}
+                                    className="w-full px-4 py-3 bg-[#FAF7F2] dark:bg-[#1e1614] border border-[#E8E4DF] dark:border-white/10 rounded-lg text-[#1E1815] dark:text-white placeholder:text-[#6B6560]/60 focus:outline-none focus:ring-2 focus:ring-[#c16549]/20 focus:border-[#c16549] transition-all disabled:opacity-50"
                                     placeholder="Jane Austen"
                                     style={{ fontFamily: "'Noto Sans', sans-serif" }}
                                 />
@@ -121,29 +177,9 @@ export default function Signup() {
                                     required
                                     value={formData.email}
                                     onChange={handleChange}
-                                    className="w-full px-4 py-3 bg-[#FAF7F2] dark:bg-[#1e1614] border border-[#E8E4DF] dark:border-white/10 rounded-lg text-[#1E1815] dark:text-white placeholder:text-[#6B6560]/60 focus:outline-none focus:ring-2 focus:ring-[#c16549]/20 focus:border-[#c16549] transition-all"
+                                    disabled={loading}
+                                    className="w-full px-4 py-3 bg-[#FAF7F2] dark:bg-[#1e1614] border border-[#E8E4DF] dark:border-white/10 rounded-lg text-[#1E1815] dark:text-white placeholder:text-[#6B6560]/60 focus:outline-none focus:ring-2 focus:ring-[#c16549]/20 focus:border-[#c16549] transition-all disabled:opacity-50"
                                     placeholder="reader@example.com"
-                                    style={{ fontFamily: "'Noto Sans', sans-serif" }}
-                                />
-                            </div>
-
-                            {/* Library Card (Optional) */}
-                            <div>
-                                <label
-                                    htmlFor="libraryCard"
-                                    className="block text-sm font-medium text-[#1E1815] dark:text-white mb-2"
-                                    style={{ fontFamily: "'Noto Sans', sans-serif" }}
-                                >
-                                    Library Card Number <span className="text-[#6B6560] font-normal">(Optional)</span>
-                                </label>
-                                <input
-                                    id="libraryCard"
-                                    name="libraryCard"
-                                    type="text"
-                                    value={formData.libraryCard}
-                                    onChange={handleChange}
-                                    className="w-full px-4 py-3 bg-[#FAF7F2] dark:bg-[#1e1614] border border-[#E8E4DF] dark:border-white/10 rounded-lg text-[#1E1815] dark:text-white placeholder:text-[#6B6560]/60 focus:outline-none focus:ring-2 focus:ring-[#c16549]/20 focus:border-[#c16549] transition-all"
-                                    placeholder="LC-123456"
                                     style={{ fontFamily: "'Noto Sans', sans-serif" }}
                                 />
                             </div>
@@ -164,7 +200,8 @@ export default function Signup() {
                                     required
                                     value={formData.password}
                                     onChange={handleChange}
-                                    className="w-full px-4 py-3 bg-[#FAF7F2] dark:bg-[#1e1614] border border-[#E8E4DF] dark:border-white/10 rounded-lg text-[#1E1815] dark:text-white placeholder:text-[#6B6560]/60 focus:outline-none focus:ring-2 focus:ring-[#c16549]/20 focus:border-[#c16549] transition-all"
+                                    disabled={loading}
+                                    className="w-full px-4 py-3 bg-[#FAF7F2] dark:bg-[#1e1614] border border-[#E8E4DF] dark:border-white/10 rounded-lg text-[#1E1815] dark:text-white placeholder:text-[#6B6560]/60 focus:outline-none focus:ring-2 focus:ring-[#c16549]/20 focus:border-[#c16549] transition-all disabled:opacity-50"
                                     placeholder="••••••••"
                                     style={{ fontFamily: "'Noto Sans', sans-serif" }}
                                 />
@@ -186,7 +223,8 @@ export default function Signup() {
                                     required
                                     value={formData.confirmPassword}
                                     onChange={handleChange}
-                                    className="w-full px-4 py-3 bg-[#FAF7F2] dark:bg-[#1e1614] border border-[#E8E4DF] dark:border-white/10 rounded-lg text-[#1E1815] dark:text-white placeholder:text-[#6B6560]/60 focus:outline-none focus:ring-2 focus:ring-[#c16549]/20 focus:border-[#c16549] transition-all"
+                                    disabled={loading}
+                                    className="w-full px-4 py-3 bg-[#FAF7F2] dark:bg-[#1e1614] border border-[#E8E4DF] dark:border-white/10 rounded-lg text-[#1E1815] dark:text-white placeholder:text-[#6B6560]/60 focus:outline-none focus:ring-2 focus:ring-[#c16549]/20 focus:border-[#c16549] transition-all disabled:opacity-50"
                                     placeholder="••••••••"
                                     style={{ fontFamily: "'Noto Sans', sans-serif" }}
                                 />
@@ -201,6 +239,7 @@ export default function Signup() {
                                     required
                                     checked={formData.agreeToTerms}
                                     onChange={handleChange}
+                                    disabled={loading}
                                     className="w-4 h-4 mt-1 rounded border-[#E8E4DF] text-[#c16549] focus:ring-[#c16549]/20"
                                 />
                                 <label
@@ -215,11 +254,14 @@ export default function Signup() {
                             {/* Submit Button */}
                             <button
                                 type="submit"
-                                className="w-full bg-[#c16549] hover:bg-[#a0523b] text-white py-3 rounded-lg font-semibold text-base transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 group"
+                                disabled={loading}
+                                className="w-full bg-[#c16549] hover:bg-[#a0523b] text-white py-3 rounded-lg font-semibold text-base transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 group disabled:opacity-50 disabled:cursor-not-allowed"
                                 style={{ fontFamily: "'Noto Sans', sans-serif" }}
                             >
-                                <span>Create Account</span>
-                                <span className="material-symbols-outlined text-lg group-hover:translate-x-1 transition-transform">arrow_forward</span>
+                                <span>{loading ? 'Creating Account...' : 'Create Account'}</span>
+                                {!loading && (
+                                    <span className="material-symbols-outlined text-lg group-hover:translate-x-1 transition-transform">arrow_forward</span>
+                                )}
                             </button>
                         </form>
 

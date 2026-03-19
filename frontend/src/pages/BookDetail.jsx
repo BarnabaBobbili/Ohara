@@ -1,7 +1,102 @@
-// Book Detail Page - Exact copy from Stitch curated_book_detail_view
+import { useState, useEffect } from 'react';
+import { useParams, useLocation } from 'react-router-dom';
 import Header from '../components/Header';
+import GoogleBooksViewer from '../components/GoogleBooksViewer';
+import EpubReader from '../components/EpubReader';
+import { BACKEND_ORIGIN } from '../config/api';
+
+const BACKEND_URL = BACKEND_ORIGIN;
 
 export default function BookDetail() {
+    const { id } = useParams();
+    const location = useLocation();
+    const [book, setBook] = useState(location.state?.book || null);
+    const [loading, setLoading] = useState(!location.state?.book);
+    const [isExternal, setIsExternal] = useState(location.state?.isExternal || id.includes('-'));
+    const [showReader, setShowReader] = useState(false);
+
+    useEffect(() => {
+        // Always fetch full details for external books since search results don't include description/ISBN
+        if (!book || isExternal) {
+            loadBookDetails();
+        }
+    }, [id]);
+
+    const loadBookDetails = async () => {
+        setLoading(true);
+        try {
+            if (isExternal || id.includes('-')) {
+                // External book - fetch from external API
+                const [source, sourceId] = id.split('-');
+                const response = await fetch(
+                    `${BACKEND_URL}/api/external-books/${source}/${sourceId}`
+                );
+                if (response.ok) {
+                    const data = await response.json();
+                    setBook(data);
+                    setIsExternal(true);
+                }
+            } else {
+                // Local book - fetch from local API
+                const response = await fetch(`${BACKEND_URL}/api/books/${id}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    setBook(data);
+                    setIsExternal(false);
+                }
+            }
+        } catch (error) {
+            console.error('Error loading book:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+
+    const handleReadNow = () => {
+        // Open in-page reader modal
+        setShowReader(true);
+    };
+
+    const getEpubUrl = () => {
+        if (!book) return null;
+
+        if (book.download_urls) {
+            return book.download_urls.epub || book.download_urls.pdf;
+        }
+
+        // Fallback for Gutenberg
+        if (book.source === 'gutenberg' && book.source_id) {
+            return `https://www.gutenberg.org/ebooks/${book.source_id}.epub.noimages`;
+        }
+
+        return null;
+    };
+
+
+
+    if (loading) {
+        return (
+            <>
+                <Header />
+                <div className="bg-[#f6f8f7] dark:bg-[#11211c] min-h-screen flex items-center justify-center pt-24">
+                    <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-[#17cf91]"></div>
+                </div>
+            </>
+        );
+    }
+
+    if (!book) {
+        return (
+            <>
+                <Header />
+                <div className="bg-[#f6f8f7] dark:bg-[#11211c] min-h-screen flex items-center justify-center pt-24">
+                    <p className="text-xl text-slate-600">Book not found</p>
+                </div>
+            </>
+        );
+    }
+
     return (
         <>
             <Header />
@@ -14,9 +109,11 @@ export default function BookDetail() {
                     <div className="flex items-center gap-2 mb-12 text-sm text-slate-500 dark:text-slate-400">
                         <a className="hover:text-[#17cf91] transition-colors" href="/">Library</a>
                         <span className="material-symbols-outlined text-[14px]">chevron_right</span>
-                        <a className="hover:text-[#17cf91] transition-colors" href="#">Fiction</a>
+                        <a className="hover:text-[#17cf91] transition-colors" href="/catalog">
+                            {isExternal ? 'Free Books' : 'Local Catalog'}
+                        </a>
                         <span className="material-symbols-outlined text-[14px]">chevron_right</span>
-                        <span className="text-slate-900 dark:text-white font-medium">Mystery</span>
+                        <span className="text-slate-900 dark:text-white font-medium">{book.title?.substring(0, 30)}</span>
                     </div>
 
                     {/* Hero Section */}
@@ -25,152 +122,161 @@ export default function BookDetail() {
                         <div className="md:col-span-5 lg:col-span-4 relative group perspective-1000">
                             <div className="w-full aspect-[2/3] bg-slate-200 rounded-r-md rounded-l-sm transform transition-transform duration-500 hover:scale-[1.02] overflow-hidden relative"
                                 style={{ boxShadow: '10px 10px 30px -5px rgba(0, 0, 0, 0.3)' }}>
-                                {/* Texture Overlay */}
                                 <div className="absolute inset-0 bg-gradient-to-r from-black/20 to-transparent w-4 z-10 pointer-events-none"></div>
-                                <div className="w-full h-full bg-cover bg-center"
-                                    style={{ backgroundImage: "url('https://lh3.googleusercontent.com/aida-public/AB6AXuCV4V0q755g0wfXeksM-h_fQJgaaTkq89fdq6syOasd65HcfGCai-h9YpUgSAcEokwiWsieUZxNBgF4OzPl3ll5C3jPKKZa2F-eShItSb95ZT2IzQvqZhyZI9O-MDxJz5iYE7LrIIdpLp2UepsWZkLPTUQj8dKUda0oWLMa4-k6O5DRfNJUnqLk3TtMDVhLCvf_bMd0L9EacMWxcD0Q2cxS7Vd9_ysvSE9MBwWSLLTGEyzFnsX24cPBzX021Cfbe3tUdFe8vLpSOwHf')" }}>
-                                </div>
+                                {book.cover_url || book.cover_image_url ? (
+                                    <img
+                                        src={book.cover_url || book.cover_image_url}
+                                        alt={book.title}
+                                        className="w-full h-full object-cover"
+                                    />
+                                ) : (
+                                    <div className="w-full h-full bg-gradient-to-br from-slate-300 to-slate-400 flex items-center justify-center">
+                                        <span className="material-symbols-outlined text-9xl text-slate-500">auto_stories</span>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
                         {/* Book Details */}
                         <div className="md:col-span-7 lg:col-span-8 flex flex-col justify-center">
                             <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold text-slate-900 dark:text-white leading-[0.95] tracking-tight mb-4">
-                                The Shadow <br /> of the Wind
+                                {book.title}
                             </h1>
                             <h2 className="text-2xl md:text-3xl font-normal italic text-slate-500 dark:text-slate-400 mb-8">
-                                by Carlos Ruiz Zafón
+                                by {book.author || 'Unknown Author'}
                             </h2>
-                            <div className="flex items-center gap-2 mb-10 text-[#17cf91]">
-                                <span className="material-symbols-outlined text-[20px] animate-pulse">location_on</span>
-                                <p className="text-lg font-medium">Waiting for you on Shelf 4B</p>
+
+                            {/* Status Badge */}
+                            <div className="flex items-center gap-2 mb-10">
+                                {isExternal ? (
+                                    <>
+                                        {book.is_public_domain && (
+                                            <div className="flex items-center gap-2 text-[#17cf91]">
+                                                <span className="material-symbols-outlined text-[20px] animate-pulse">check_circle</span>
+                                                <p className="text-lg font-medium">Free to Read - Public Domain</p>
+                                            </div>
+                                        )}
+                                        {book.can_borrow && !book.is_public_domain && (
+                                            <div className="flex items-center gap-2 text-yellow-600">
+                                                <span className="material-symbols-outlined text-[20px]">schedule</span>
+                                                <p className="text-lg font-medium">Available for 14-Day Borrow</p>
+                                            </div>
+                                        )}
+                                    </>
+                                ) : (
+                                    <div className="flex items-center gap-2 text-[#17cf91]">
+                                        <span className="material-symbols-outlined text-[20px] animate-pulse">location_on</span>
+                                        <p className="text-lg font-medium">
+                                            {book.available_copies > 0 ? `Available - ${book.available_copies} copies` : 'Currently Checked Out'}
+                                        </p>
+                                    </div>
+                                )}
                             </div>
+
+                            {/* Action Buttons */}
                             <div className="flex flex-wrap gap-4">
-                                <button className="bg-[#17cf91] hover:bg-[#17cf91]/90 text-white px-8 py-3 rounded-full font-semibold tracking-wide transition-all flex items-center gap-2"
-                                    style={{ boxShadow: '0 10px 25px rgba(23, 207, 145, 0.3)' }}>
-                                    <span>Reserve Copy</span>
-                                </button>
-                                <button className="bg-white dark:bg-transparent border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white px-8 py-3 rounded-full font-semibold tracking-wide hover:bg-slate-50 dark:hover:bg-slate-800 transition-all flex items-center gap-2">
-                                    <span className="material-symbols-outlined text-[18px]">map</span>
-                                    <span>Locate in Library</span>
-                                </button>
+                                {isExternal && (
+                                    <button
+                                        onClick={handleReadNow}
+                                        className="bg-[#17cf91] hover:bg-[#17cf91]/90 text-white px-8 py-3 rounded-full font-semibold tracking-wide transition-all flex items-center gap-2"
+                                        style={{ boxShadow: '0 10px 25px rgba(23, 207, 145, 0.3)' }}
+                                    >
+                                        <span className="material-symbols-outlined">auto_stories</span>
+                                        <span>{book.source === 'google_books' ? 'Preview' : 'Read Now'}</span>
+                                    </button>
+                                )}
+                                {!isExternal && book.available_copies > 0 && (
+                                    <button className="bg-[#17cf91] hover:bg-[#17cf91]/90 text-white px-8 py-3 rounded-full font-semibold tracking-wide transition-all"
+                                        style={{ boxShadow: '0 10px 25px rgba(23, 207, 145, 0.3)' }}>
+                                        Reserve Copy
+                                    </button>
+                                )}
+                                {book.formats && book.formats.length > 0 && (
+                                    <div className="flex items-center gap-2 px-6 py-3 bg-slate-100 dark:bg-slate-800 rounded-full">
+                                        <span className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                                            Formats: {book.formats.slice(0, 3).join(', ').toUpperCase()}
+                                        </span>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
 
-                    {/* Grid Layout for Content + Marginalia */}
+                    {/* Grid Layout for Content */}
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-20 border-t border-slate-200 dark:border-slate-800 pt-16">
-                        {/* Main Column: Synopsis */}
+                        {/* Main Column: Description */}
                         <div className="lg:col-span-8">
-                            <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400 mb-6">Synopsis</h3>
+                            <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400 mb-6">
+                                {isExternal ? 'About This Book' : 'Synopsis'}
+                            </h3>
                             <div className="prose prose-xl prose-slate dark:prose-invert max-w-none"
                                 style={{ fontFamily: "'Newsreader', serif" }}>
                                 <p className="first-letter:text-6xl first-letter:font-bold first-letter:float-left first-letter:mr-3 first-letter:mt-[-10px] first-letter:text-slate-900 dark:first-letter:text-white text-lg md:text-xl leading-relaxed text-slate-700 dark:text-slate-300">
-                                    Barcelona, 1945: A city slowly heals in the aftermath of the Spanish Civil War, and Daniel, an antiquarian book dealer's son who mourns the loss of his mother, finds solace in a mysterious book entitled <i>The Shadow of the Wind</i>, by one Julián Carax.
+                                    {book.description || book.summary || `Discover "${book.title}"${book.author ? ` by ${book.author}` : ''}. Click Preview or Read Now to explore this book.`}
                                 </p>
-                                <p className="text-lg md:text-xl leading-relaxed text-slate-700 dark:text-slate-300 mt-6">
-                                    But when he sets out to find the author's other works, he makes a shocking discovery: someone has been systematically destroying every copy of every book Carax has written. In fact, Daniel may have the last of Carax's books in existence. Soon Daniel's seemingly innocent quest opens a door into one of Barcelona's darkest secrets—an epic story of murder, madness, and doomed love.
-                                </p>
+                            </div>
+
+                            {/* Book Metadata */}
+                            <div className="mt-12 grid grid-cols-2 gap-6 p-6 bg-slate-50 dark:bg-slate-900/50 rounded-xl">
+                                <div>
+                                    <h4 className="text-xs uppercase tracking-wider text-slate-400 mb-2">ISBN</h4>
+                                    <p className="text-slate-900 dark:text-white font-medium">{book.isbn || 'N/A'}</p>
+                                </div>
+                                <div>
+                                    <h4 className="text-xs uppercase tracking-wider text-slate-400 mb-2">Publisher</h4>
+                                    <p className="text-slate-900 dark:text-white font-medium">{book.publisher || 'Unknown'}</p>
+                                </div>
+                                <div>
+                                    <h4 className="text-xs uppercase tracking-wider text-slate-400 mb-2">Published</h4>
+                                    <p className="text-slate-900 dark:text-white font-medium">{book.publication_year || book.publish_date || 'Unknown'}</p>
+                                </div>
+                                {isExternal && (
+                                    <div>
+                                        <h4 className="text-xs uppercase tracking-wider text-slate-400 mb-2">Source</h4>
+                                        <p className="text-slate-900 dark:text-white font-medium capitalize">
+                                            {book.source?.replace('_', ' ') || 'External'}
+                                        </p>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
-                        {/* Sidebar: Marginalia Reviews */}
+                        {/* Sidebar: Info Card */}
                         <div className="lg:col-span-4 space-y-8 lg:mt-12">
-                            <div className="relative pl-6 border-l-2 border-[#17cf91]/30">
-                                <span className="absolute -left-2 top-0 text-[#17cf91] text-2xl font-serif">"</span>
-                                <p className="text-slate-600 dark:text-slate-400 italic text-base leading-relaxed mb-2">
-                                    A gothic masterpiece. It feels like this book was written in ink and fog.
-                                </p>
-                                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">— Reviewer #482</span>
-                            </div>
-                            <div className="relative pl-6 border-l-2 border-[#17cf91]/30">
-                                <span className="absolute -left-2 top-0 text-[#17cf91] text-2xl font-serif">"</span>
-                                <p className="text-slate-600 dark:text-slate-400 italic text-base leading-relaxed mb-2">
-                                    I found myself wandering the streets of Barcelona in my dreams for weeks after.
-                                </p>
-                                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">— Reviewer #911</span>
-                            </div>
-                            <div className="relative pl-6 border-l-2 border-[#17cf91]/30">
-                                <span className="absolute -left-2 top-0 text-[#17cf91] text-2xl font-serif">"</span>
-                                <p className="text-slate-600 dark:text-slate-400 italic text-base leading-relaxed mb-2">
-                                    The Cemetery of Forgotten Books is a place I wish existed.
-                                </p>
-                                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">— Reviewer #103</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Curated Pairing Section */}
-                    <div className="mt-24 pt-16 border-t border-slate-200 dark:border-slate-800">
-                        <div className="flex items-baseline justify-between mb-12">
-                            <h3 className="text-2xl font-bold text-slate-900 dark:text-white">A Curated Pairing</h3>
-                            <span className="text-sm italic text-slate-500">Selected by Chief Librarian Vance</span>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                            {/* Book 1 */}
-                            <div className="group cursor-pointer">
-                                <div className="bg-[#fbfcfb] dark:bg-slate-800 p-6 rounded-xl border border-slate-100 dark:border-slate-700 transition-shadow hover:shadow-lg h-full flex flex-col">
-                                    <div className="flex gap-4 mb-4">
-                                        <div className="w-16 h-24 bg-slate-300 rounded shadow-md flex-shrink-0"></div>
-                                        <div>
-                                            <h4 className="font-bold text-lg text-slate-900 dark:text-white leading-tight">The Thirteenth Tale</h4>
-                                            <p className="text-sm text-slate-500">Diane Setterfield</p>
+                            <div className="bg-gradient-to-br from-[#17cf91]/10 to-transparent p-6 rounded-xl border border-[#17cf91]/20">
+                                <h4 className="font-bold text-lg mb-4 text-slate-900 dark:text-white">Quick Info</h4>
+                                <div className="space-y-3 text-sm">
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-600 dark:text-slate-400">Category:</span>
+                                        <span className="font-medium text-slate-900 dark:text-white">{book.category || 'General'}</span>
+                                    </div>
+                                    {!isExternal && (
+                                        <>
+                                            <div className="flex justify-between">
+                                                <span className="text-slate-600 dark:text-slate-400">Total Copies:</span>
+                                                <span className="font-medium text-slate-900 dark:text-white">{book.total_copies || 0}</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-slate-600 dark:text-slate-400">Available:</span>
+                                                <span className="font-medium text-[#17cf91]">{book.available_copies || 0}</span>
+                                            </div>
+                                        </>
+                                    )}
+                                    {isExternal && book.formats && (
+                                        <div className="flex justify-between">
+                                            <span className="text-slate-600 dark:text-slate-400">Downloads:</span>
+                                            <span className="font-medium text-slate-900 dark:text-white">{book.formats.length} formats</span>
                                         </div>
-                                    </div>
-                                    <div className="mt-auto">
-                                        <p className="text-[#17cf91] italic text-lg leading-snug"
-                                            style={{ fontStyle: 'italic', fontWeight: 500 }}>
-                                            "If you loved the gothic atmosphere and family secrets, this is your next stop."
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Book 2 */}
-                            <div className="group cursor-pointer">
-                                <div className="bg-[#fbfcfb] dark:bg-slate-800 p-6 rounded-xl border border-slate-100 dark:border-slate-700 transition-shadow hover:shadow-lg h-full flex flex-col">
-                                    <div className="flex gap-4 mb-4">
-                                        <div className="w-16 h-24 bg-slate-300 rounded shadow-md flex-shrink-0"></div>
-                                        <div>
-                                            <h4 className="font-bold text-lg text-slate-900 dark:text-white leading-tight">Foucault's Pendulum</h4>
-                                            <p className="text-sm text-slate-500">Umberto Eco</p>
-                                        </div>
-                                    </div>
-                                    <div className="mt-auto">
-                                        <p className="text-[#17cf91] italic text-lg leading-snug"
-                                            style={{ fontStyle: 'italic', fontWeight: 500 }}>
-                                            "For those who enjoy the deep mystery of texts and history intertwining."
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Book 3 */}
-                            <div className="group cursor-pointer">
-                                <div className="bg-[#fbfcfb] dark:bg-slate-800 p-6 rounded-xl border border-slate-100 dark:border-slate-700 transition-shadow hover:shadow-lg h-full flex flex-col">
-                                    <div className="flex gap-4 mb-4">
-                                        <div className="w-16 h-24 bg-slate-300 rounded shadow-md flex-shrink-0"></div>
-                                        <div>
-                                            <h4 className="font-bold text-lg text-slate-900 dark:text-white leading-tight">The Name of the Rose</h4>
-                                            <p className="text-sm text-slate-500">Umberto Eco</p>
-                                        </div>
-                                    </div>
-                                    <div className="mt-auto">
-                                        <p className="text-[#17cf91] italic text-lg leading-snug"
-                                            style={{ fontStyle: 'italic', fontWeight: 500 }}>
-                                            "Another library full of deadly secrets waiting to be uncovered."
-                                        </p>
-                                    </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
                     </div>
                 </main>
 
-                {/* Footer / Ex Libris */}
+                {/* Footer */}
                 <footer className="mt-auto py-12 flex flex-col items-center justify-center border-t border-slate-200 dark:border-slate-800 bg-[#f0f4f3] dark:bg-[#0c1814]">
                     <div className="opacity-60 hover:opacity-100 transition-opacity duration-500 group cursor-default">
-                        {/* Ex Libris SVG Stamp */}
                         <div className="size-32 rounded-full border-4 border-slate-800 dark:border-slate-400 flex items-center justify-center relative rotate-12 group-hover:rotate-0 transition-transform duration-700">
                             <div className="absolute inset-1 border border-slate-800 dark:border-slate-400 rounded-full"></div>
                             <div className="flex flex-col items-center text-slate-800 dark:text-slate-400">
@@ -180,15 +286,44 @@ export default function BookDetail() {
                             </div>
                         </div>
                     </div>
-                    <div className="mt-8 flex gap-6 text-sm font-medium text-slate-500">
-                        <a className="hover:text-[#17cf91] transition-colors" href="#">About</a>
-                        <a className="hover:text-[#17cf91] transition-colors" href="#">Locations</a>
-                        <a className="hover:text-[#17cf91] transition-colors" href="#">Policies</a>
-                        <a className="hover:text-[#17cf91] transition-colors" href="#">Contact</a>
-                    </div>
-                    <p className="text-xs text-slate-400 mt-6">© 2024 Bibliotheca Intelligent Systems. All rights reserved.</p>
+                    <p className="text-xs text-slate-400 mt-6">© 2024 Library Management System</p>
                 </footer>
             </div>
+
+            {/* In-Page Reader Modal */}
+            {showReader && book && (
+                <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-4">
+                    <div className="relative w-full max-w-6xl h-[90vh] bg-white rounded-lg overflow-hidden">
+                        <button
+                            onClick={() => setShowReader(false)}
+                            className="absolute top-4 right-4 z-10 bg-white rounded-full p-3 shadow-lg hover:bg-gray-100"
+                        >
+                            <span className="material-symbols-outlined">close</span>
+                        </button>
+
+                        <div className="h-full p-6">
+                            {book.source === 'google_books' ? (
+                                <GoogleBooksViewer bookId={book.source_id} isbn={book.isbn} />
+                            ) : (book.source === 'gutenberg' || book.source === 'internet_archive') && getEpubUrl() ? (
+                                <EpubReader epubUrl={getEpubUrl()} title={book.title} />
+                            ) : (
+                                <div className="flex items-center justify-center h-full">
+                                    <div className="text-center">
+                                        <span className="material-symbols-outlined text-6xl text-gray-400">menu_book</span>
+                                        <p className="text-gray-600 mb-4">In-page reading not available</p>
+                                        {book.preview_link && (
+                                            <a href={book.preview_link} target="_blank" rel="noopener noreferrer"
+                                                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                                                Open External Preview
+                                            </a>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </>
     );
 }
