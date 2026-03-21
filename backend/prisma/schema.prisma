@@ -1,6 +1,7 @@
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider        = "prisma-client-js"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["partialIndexes"]
 }
 
 datasource db {
@@ -8,71 +9,88 @@ datasource db {
 }
 
 model books {
-  id               Int            @id @default(autoincrement())
-  isbn             String         @unique
+  id               Int                @id @default(autoincrement())
+  isbn             String             @unique
   title            String
   author           String
   publisher        String?
   publication_year Int?
   category         String?
-  language         String?        @default("English")
+  language         String?            @default("English")
   pages            Int?
   description      String?
   cover_image_url  String?
-  total_copies     Int            @default(1)
-  available_copies Int            @default(1)
+  total_copies     Int                @default(1)
+  available_copies Int                @default(1)
   location         String?
-  created_at       DateTime       @default(now())
-  updated_at       DateTime       @updatedAt
-  transactions     transactions[]
+  created_at       DateTime           @default(now())
+  updated_at       DateTime           @updatedAt
+  collection_books collection_books[]
+  ebooks           ebooks[]
   reservations     reservations[]
+  transactions     transactions[]
 
   @@index([category])
   @@index([author])
   @@index([updated_at])
+  @@index([author], map: "idx_books_author")
+  @@index([author(ops: raw("gin_trgm_ops"))], map: "idx_books_author_trgm", type: Gin)
+  @@index([category], map: "idx_books_category")
+  @@index([isbn(ops: raw("gin_trgm_ops"))], map: "idx_books_isbn_trgm", type: Gin)
+  @@index([title(ops: raw("gin_trgm_ops"))], map: "idx_books_title_trgm", type: Gin)
+  @@index([updated_at(sort: Desc)], map: "idx_books_updated_at")
 }
 
 model members {
-  id                    Int                    @id @default(autoincrement())
-  card_id               String                 @unique
-  name                  String
-  email                 String                 @unique
-  phone                 String?
-  address               String?
-  password_hash         String?
-  member_type           String
-  status                String                 @default("active")
-  fines                 Float                  @default(0.0)
-  joined_date           DateTime               @default(now())
-  expiry_date           DateTime?
-  last_visit            DateTime?
-  transactions          transactions[]
-  reservations          reservations[]
-  user_uploaded_books   user_uploaded_books[]
-  reading_progress      reading_progress[]
+  id                                                  Int                   @id @default(autoincrement())
+  card_id                                             String                @unique
+  name                                                String
+  email                                               String                @unique
+  phone                                               String?
+  address                                             String?
+  password_hash                                       String?
+  member_type                                         String
+  status                                              String                @default("active")
+  fines                                               Float                 @default(0.0)
+  joined_date                                         DateTime              @default(now())
+  expiry_date                                         DateTime?
+  last_visit                                          DateTime?
+  role                                                String                @default("member")
+  supabase_uid                                        String?               @unique @db.Uuid
+  updated_at                                          DateTime              @default(now()) @db.Timestamptz(6)
+  reading_progress                                    reading_progress[]
+  reservations                                        reservations[]
+  transactions_transactions_issued_by_memberTomembers transactions[]        @relation("transactions_issued_by_memberTomembers")
+  transactions                                        transactions[]
+  user_uploaded_books                                 user_uploaded_books[]
 
   @@index([status])
   @@index([member_type])
   @@index([joined_date])
+  @@index([joined_date(sort: Desc)], map: "idx_members_joined_date")
+  @@index([member_type], map: "idx_members_member_type")
+  @@index([role], map: "idx_members_role")
+  @@index([status], map: "idx_members_status")
+  @@index([supabase_uid], map: "idx_members_supabase_uid")
 }
 
 model transactions {
-  id                 Int       @id @default(autoincrement())
-  book_id            Int
-  member_id          Int
-  staff_id           Int?
-  checkout_date      DateTime  @default(now())
-  due_date           DateTime
-  return_date        DateTime?
-  status             String    @default("checked_out")
-  checkout_condition String?   @default("good")
-  return_condition   String?
-  fine_amount        Float     @default(0.0)
-  fine_paid          Boolean   @default(false)
-  notes              String?
-  book               books     @relation(fields: [book_id], references: [id])
-  member             members   @relation(fields: [member_id], references: [id])
-  staff_rel          staff?    @relation(fields: [staff_id], references: [id])
+  id                                             Int       @id @default(autoincrement())
+  book_id                                        Int
+  member_id                                      Int
+  checkout_date                                  DateTime  @default(now())
+  due_date                                       DateTime
+  return_date                                    DateTime?
+  status                                         String    @default("checked_out")
+  checkout_condition                             String?   @default("good")
+  return_condition                               String?
+  fine_amount                                    Float     @default(0.0)
+  fine_paid                                      Boolean   @default(false)
+  notes                                          String?
+  issued_by_member                               Int?
+  book                                           books     @relation(fields: [book_id], references: [id])
+  members_transactions_issued_by_memberTomembers members?  @relation("transactions_issued_by_memberTomembers", fields: [issued_by_member], references: [id], onUpdate: NoAction)
+  member                                         members   @relation(fields: [member_id], references: [id])
 
   @@index([book_id])
   @@index([member_id])
@@ -81,6 +99,13 @@ model transactions {
   @@index([due_date])
   @@index([status, due_date])
   @@index([member_id, status])
+  @@index([book_id], map: "idx_transactions_book_id")
+  @@index([checkout_date(sort: Desc)], map: "idx_transactions_checkout_date")
+  @@index([due_date], map: "idx_transactions_due_date")
+  @@index([member_id], map: "idx_transactions_member_id")
+  @@index([member_id, status], map: "idx_transactions_member_status")
+  @@index([status], map: "idx_transactions_status")
+  @@index([status, due_date], map: "idx_transactions_status_due_date")
 }
 
 model reservations {
@@ -95,40 +120,7 @@ model reservations {
   member           members   @relation(fields: [member_id], references: [id])
 
   @@index([status])
-}
-
-model staff {
-  id            Int            @id @default(autoincrement())
-  staff_id      String         @unique
-  name          String
-  email         String         @unique
-  phone         String?
-  password_hash String
-  role          String
-  permissions   String?
-  status        String         @default("active")
-  hired_date    DateTime       @default(now())
-  last_login    DateTime?
-  transactions  transactions[]
-}
-
-model external_book_cache {
-  id                Int      @id @default(autoincrement())
-  source            String
-  source_id         String
-  isbn              String?
-  title             String?
-  author            String?
-  cover_url         String?
-  description       String?
-  subjects          String?
-  formats_available String?
-  is_public_domain  Boolean  @default(false)
-  can_borrow        Boolean  @default(false)
-  cached_at         DateTime @default(now())
-
-  @@unique([source, source_id])
-  @@index([cached_at])
+  @@index([status], map: "idx_reservations_status")
 }
 
 model user_uploaded_books {
@@ -153,4 +145,80 @@ model reading_progress {
   progress_percent Float    @default(0)
   last_read_at     DateTime @default(now())
   member           members  @relation(fields: [member_id], references: [id])
+}
+
+model site_settings {
+  id         Int      @id @default(autoincrement())
+  key        String   @unique
+  value      String
+  category   String   @default("general")
+  updated_at DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+
+  @@index([category], map: "idx_site_settings_category")
+}
+
+model collections {
+  id               Int                @id @default(autoincrement())
+  name             String             @unique
+  description      String?
+  cover_image      String?
+  display_order    Int                @default(0)
+  is_active        Boolean            @default(true)
+  created_at       DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime           @default(now()) @updatedAt @db.Timestamptz(6)
+  is_pinned        Boolean            @default(false)
+  collection_books collection_books[]
+
+  @@index([is_pinned], map: "idx_collections_is_pinned", where: raw("(is_pinned = true)"))
+}
+
+model collection_books {
+  id            Int         @id @default(autoincrement())
+  collection_id Int
+  book_id       Int
+  display_order Int         @default(0)
+  added_at      DateTime    @default(now()) @db.Timestamptz(6)
+  book          books       @relation(fields: [book_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  collection    collections @relation(fields: [collection_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([collection_id, book_id])
+  @@index([collection_id], map: "idx_collection_books_collection")
+}
+
+model ebooks {
+  id          Int      @id @default(autoincrement())
+  book_id     Int?
+  title       String
+  author      String?
+  file_path   String
+  file_format String
+  file_size   Int?
+  cover_path  String?
+  is_public   Boolean  @default(false)
+  uploaded_by Int?
+  uploaded_at DateTime @default(now()) @db.Timestamptz(6)
+  book        books?   @relation(fields: [book_id], references: [id], onUpdate: NoAction)
+
+  @@index([book_id], map: "idx_ebooks_book_id")
+}
+
+model staff_board_posts {
+  id         Int       @id @default(autoincrement())
+  title      String
+  content    String
+  category   String    @default("announcement")
+  is_pinned  Boolean   @default(false)
+  posted_by  Int?
+  created_at DateTime  @default(now()) @db.Timestamptz(6)
+  expires_at DateTime? @db.Timestamptz(6)
+}
+
+model library_events {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String?
+  event_date  DateTime @db.Timestamptz(6)
+  location    String?
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
 }

@@ -19,8 +19,14 @@ import authRouter from './routes/auth.js';
 import reportsRouter from './routes/reports.js';
 import dashboardRouter from './routes/dashboard.js';
 import auditRouter from './routes/audit.js';
-import externalBooksRouter from './routes/external_books.js';
 import userLibraryRouter from './routes/user_library.js';
+import cmsRouter from './routes/cms.js';
+import siteSettingsRouter from './routes/site_settings.js';
+import collectionsRouter from './routes/collections.js';
+import recommendationsRouter from './routes/recommendations.js';
+import financialRouter from './routes/financial.js';
+import staffBoardRouter from './routes/staff_board.js';
+import ebooksRouter from './routes/ebooks.js';
 
 dotenv.config();
 
@@ -94,8 +100,14 @@ app.use('/api/auth', authRouter);
 app.use('/api/reports', reportsRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/audit', auditRouter);
-app.use('/api/external-books', externalBooksRouter);
 app.use('/api/user-library', userLibraryRouter);
+app.use('/api/cms', cmsRouter);
+app.use('/api/settings', siteSettingsRouter);
+app.use('/api/collections', collectionsRouter);
+app.use('/api/recommendations', recommendationsRouter);
+app.use('/api/financial', financialRouter);
+app.use('/api/staff-board', staffBoardRouter);
+app.use('/api/ebooks', ebooksRouter);
 
 app.use((err, req, res, next) => {
     console.error('Error:', err);

@@ -1,5 +1,32 @@
 // Philosophy Section - Exact copy from Stitch landing_page_-_philosophy_section
+import { useEffect, useState } from 'react';
+import { cmsAPI } from '../../services/api';
+
+const DEFAULT_CONTENT = {
+    label: '04 — Philosophy',
+    headline: 'Ohara Philosophy',
+    body_paragraphs: [
+        'In an era defined by algorithmic noise and infinite scrolling, we built a sanctuary. Ohara is not just a feature; it is a commitment to the preservation of attention. We eschew the dopamine loops of modern software in favor of a slower, more deliberate pace.',
+        "We believe that the act of cataloging one's library is a form of meditation. It connects us to the physical reality of the books we love—the weight of the paper, the smell of the binding, the memories attached to each spine. Our software is designed to recede, allowing these tactile experiences to take center stage.",
+        'There are no notifications here. No social feeds clamoring for your engagement. Just your collection, your thoughts, and the quiet space to organize them. This is software that respects your solitude.',
+    ],
+};
+
 export default function PhilosophySection() {
+    const [content, setContent] = useState(DEFAULT_CONTENT);
+
+    useEffect(() => {
+        cmsAPI.getSection('home', 'philosophy')
+            .then((data) => {
+                if (data) {
+                    setContent({ ...DEFAULT_CONTENT, ...data });
+                }
+            })
+            .catch(() => {});
+    }, []);
+
+    const paragraphs = content.body_paragraphs?.length ? content.body_paragraphs : DEFAULT_CONTENT.body_paragraphs;
+
     return (
         <>
             <style>
@@ -37,14 +64,14 @@ export default function PhilosophySection() {
                                 {/* Meta Label */}
                                 <div className="fade-in-up" style={{ animationDelay: '0.1s' }}>
                                     <p className="text-[#89332a]/80 dark:text-[#89332a]/70 text-sm font-medium tracking-widest uppercase mb-6 border-l-2 border-[#89332a] pl-4">
-                                        04 — Philosophy
+                                        {content.label}
                                     </p>
                                 </div>
 
                                 {/* Headline */}
                                 <div className="fade-in-up" style={{ animationDelay: '0.2s' }}>
                                     <h3 className="text-[#1E1815] dark:text-white text-4xl lg:text-[48px] font-serif font-bold leading-tight mb-4 tracking-tight">
-                                        Ohara Philosophy
+                                        {content.headline}
                                     </h3>
                                 </div>
 
@@ -52,7 +79,7 @@ export default function PhilosophySection() {
                                 <div className="fade-in-up" style={{ animationDelay: '0.3s' }}>
                                     <h3 className="text-3xl md:text-4xl font-bold mb-6 text-[#1E1815] dark:text-white"
                                         style={{ fontFamily: "'Newsreader', serif" }}>
-                                        Ohara Philosophy
+                                        {content.headline}
                                     </h3>
                                 </div>
 
@@ -60,13 +87,13 @@ export default function PhilosophySection() {
                                 <div className="mb-8">
                                     <p className="text-[#1E1815] dark:text-gray-300 text-base md:text-lg leading-loose text-justify"
                                         style={{ fontFamily: "'Noto Serif', serif" }}>
-                                        <span className="text-[#89332a] text-5xl float-left mr-3 mt-[-6px] font-bold">I</span>n an era defined by algorithmic noise and infinite scrolling, we built a sanctuary. Ohara is not just a feature; it is a commitment to the preservation of attention. We eschew the dopamine loops of modern software in favor of a slower, more deliberate pace.
+                                        <span className="text-[#89332a] text-5xl float-left mr-3 mt-[-6px] font-bold">I</span>{paragraphs[0]}
                                     </p>
                                 </div><p className="text-[#171312] dark:text-gray-300 text-lg leading-relaxed mb-6 font-normal">
-                                    We believe that the act of cataloging one's library is a form of meditation. It connects us to the physical reality of the books we love—the weight of the paper, the smell of the binding, the memories attached to each spine. Our software is designed to recede, allowing these tactile experiences to take center stage.
+                                    {paragraphs[1]}
                                 </p>
                                 <p className="text-[#171312] dark:text-gray-300 text-lg leading-relaxed mb-10 font-normal">
-                                    There are no notifications here. No social feeds clamoring for your engagement. Just your collection, your thoughts, and the quiet space to organize them. This is software that respects your solitude.
+                                    {paragraphs[2]}
                                 </p>
 
                                 {/* Inkwell Illustration (SVG) */}

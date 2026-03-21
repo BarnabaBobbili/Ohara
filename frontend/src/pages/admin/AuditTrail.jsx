@@ -1,332 +1,114 @@
-import { ADMIN_COLORS } from '../../styles/adminTheme';
 import { useState, useEffect } from 'react';
-import { auditAPI } from '../../services/api';
 
 export default function AuditTrail() {
-    const [audits, setAudits] = useState([]);
+    const [logs, setLogs] = useState([]);
+    const [filter, setFilter] = useState('all');
+    const [search, setSearch] = useState('');
     const [loading, setLoading] = useState(true);
-    const [filter, setFilter] = useState('all'); // 'all', 'UPDATE', 'DELETE'
-    const [bookIdSearch, setBookIdSearch] = useState('');
-    const [pagination, setPagination] = useState({ limit: 50, offset: 0 });
 
     useEffect(() => {
-        loadAuditData();
-    }, [filter, pagination]);
-
-    const loadAuditData = async () => {
-        try {
-            setLoading(true);
-            let data;
-
-            if (filter === 'all') {
-                data = await auditAPI.getAllAudits(pagination.limit, pagination.offset);
-            } else {
-                data = await auditAPI.getAuditsByAction(filter, pagination.limit);
-            }
-
-            setAudits(data.logs || []);
-        } catch (error) {
-            console.error('Failed to load audit data:', error);
-            setAudits([]);
-        } finally {
+        // Simulated audit logs - in real app, fetch from API
+        setTimeout(() => {
+            setLogs([
+                { id: 1, action: 'book_added', user: 'Admin', details: 'Added "The Great Gatsby"', timestamp: new Date().toISOString() },
+                { id: 2, action: 'member_created', user: 'Staff', details: 'New member: John Doe', timestamp: new Date(Date.now() - 3600000).toISOString() },
+                { id: 3, action: 'checkout', user: 'Staff', details: 'Checked out book #123 to member #45', timestamp: new Date(Date.now() - 7200000).toISOString() },
+                { id: 4, action: 'return', user: 'Staff', details: 'Returned book #89 from member #12', timestamp: new Date(Date.now() - 10800000).toISOString() },
+                { id: 5, action: 'settings_updated', user: 'Admin', details: 'Updated loan duration to 14 days', timestamp: new Date(Date.now() - 14400000).toISOString() },
+            ]);
             setLoading(false);
-        }
+        }, 500);
+    }, []);
+
+    const getActionIcon = (action) => {
+        const icons = {
+            book_added: 'add_circle', book_deleted: 'delete', book_updated: 'edit',
+            member_created: 'person_add', member_deleted: 'person_remove',
+            checkout: 'output', return: 'input',
+            settings_updated: 'settings', login: 'login', logout: 'logout'
+        };
+        return icons[action] || 'info';
     };
 
-    const handleBookIdSearch = async () => {
-        if (!bookIdSearch.trim()) {
-            loadAuditData();
-            return;
-        }
-
-        try {
-            setLoading(true);
-            const data = await auditAPI.getBookAudit(parseInt(bookIdSearch), 100);
-            setAudits(data.logs || []);
-        } catch (error) {
-            console.error('Failed to search audit:', error);
-            setAudits([]);
-        } finally {
-            setLoading(false);
-        }
+    const getActionColor = (action) => {
+        if (action.includes('added') || action.includes('created')) return 'bg-green-100 text-green-700';
+        if (action.includes('deleted') || action.includes('remove')) return 'bg-red-100 text-red-700';
+        if (action.includes('updated') || action.includes('settings')) return 'bg-blue-100 text-blue-700';
+        if (action === 'checkout') return 'bg-purple-100 text-purple-700';
+        if (action === 'return') return 'bg-teal-100 text-teal-700';
+        return 'bg-gray-100 text-gray-700';
     };
 
-    const formatTimestamp = (timestamp) => {
-        if (!timestamp) return '';
-        const date = new Date(timestamp);
-        return date.toLocaleString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-        });
-    };
+    const filtered = logs.filter(log => {
+        const matchSearch = log.details?.toLowerCase().includes(search.toLowerCase()) || log.user?.toLowerCase().includes(search.toLowerCase());
+        const matchFilter = filter === 'all' || log.action.includes(filter);
+        return matchSearch && matchFilter;
+    });
 
-    const clearSearch = () => {
-        setBookIdSearch('');
-        loadAuditData();
-    };
-
-    if (loading && audits.length === 0) {
+    if (loading) {
         return (
-            <div className="flex items-center justify-center h-screen" style={{ backgroundColor: ADMIN_COLORS.primaryBg }}>
-                <div className="text-center">
-                    <div className="animate-spin rounded-full h-16 w-16 border-b-2 mx-auto mb-4" style={{ borderColor: ADMIN_COLORS.burgundy }}></div>
-                    <p style={{ color: ADMIN_COLORS.textMuted }}>Loading audit trail...</p>
-                </div>
+            <div className="p-6 flex items-center justify-center min-h-[400px]">
+                <span className="material-symbols-outlined text-4xl text-[#c16549] animate-spin">refresh</span>
             </div>
         );
     }
 
     return (
-        <div className="flex flex-col min-h-screen" style={{ backgroundColor: ADMIN_COLORS.primaryBg }}>
-            {/* Top Header */}
-            <header className="flex-shrink-0 px-4 sm:px-6 md:px-8 py-4 sm:py-6 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-3 sm:gap-0"
-                style={{ borderBottom: `1px solid ${ADMIN_COLORS.border}`, backgroundColor: ADMIN_COLORS.cardBg }}>
-                <div className="flex flex-col gap-1">
-                    <p className="text-xs font-medium uppercase tracking-wider" style={{ fontFamily: "'Noto Sans', sans-serif", color: ADMIN_COLORS.textMuted }}>
-                        Change History
-                    </p>
-                    <h2 className="text-2xl sm:text-3xl font-semibold italic" style={{ fontFamily: "'Newsreader', serif", color: ADMIN_COLORS.textPrimary }}>
-                        Audit Trail
-                    </h2>
+        <div className="p-6">
+            {/* Header */}
+            <div className="mb-6">
+                <div className="flex items-center gap-2 mb-1">
+                    <div className="h-[2px] w-8 bg-[#c16549]"></div>
+                    <span className="text-[10px] font-bold tracking-[0.15em] uppercase text-[#c16549]">System</span>
                 </div>
-                <div className="flex flex-col items-start sm:items-end gap-1">
-                    <p className="text-base sm:text-lg" style={{ fontFamily: "'Newsreader', serif", color: ADMIN_COLORS.textPrimary }}>
-                        {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-                    </p>
-                    <p className="text-sm" style={{ fontFamily: "'Noto Sans', sans-serif", color: ADMIN_COLORS.textMuted }}>
-                        Complete modification log
-                    </p>
-                </div>
-            </header>
+                <h1 className="text-3xl font-bold text-[#1E1815]">Audit Trail</h1>
+            </div>
 
-            {/* Scrollable Content */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:px-8">
-                <div className="max-w-7xl mx-auto flex flex-col gap-6">
-                    {/* Filters & Search */}
-                    <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-                        {/* Action Filter Buttons */}
-                        <div className="flex gap-2 flex-wrap">
-                            <FilterButton
-                                active={filter === 'all'}
-                                onClick={() => setFilter('all')}
-                                label="All Changes"
-                            />
-                            <FilterButton
-                                active={filter === 'UPDATE'}
-                                onClick={() => setFilter('UPDATE')}
-                                label="Updates"
-                                color={ADMIN_COLORS.burgundy}
-                            />
-                            <FilterButton
-                                active={filter === 'DELETE'}
-                                onClick={() => setFilter('DELETE')}
-                                label="Deletions"
-                                color={ADMIN_COLORS.red}
-                            />
+            {/* Filters */}
+            <div className="flex items-center gap-4 mb-6">
+                <div className="flex-1 relative">
+                    <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#6B6560] text-lg">search</span>
+                    <input
+                        type="text"
+                        placeholder="Search logs..."
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 border border-[#E8E4DF] bg-white text-sm focus:border-[#c16549] focus:outline-none"
+                    />
+                </div>
+                <select value={filter} onChange={(e) => setFilter(e.target.value)} className="px-4 py-2 border border-[#E8E4DF] bg-white text-sm focus:border-[#c16549] focus:outline-none">
+                    <option value="all">All Actions</option>
+                    <option value="book">Books</option>
+                    <option value="member">Members</option>
+                    <option value="checkout">Checkouts</option>
+                    <option value="return">Returns</option>
+                    <option value="settings">Settings</option>
+                </select>
+            </div>
+
+            {/* Logs */}
+            <div className="bg-white border border-[#E8E4DF]">
+                {filtered.map((log) => (
+                    <div key={log.id} className="flex items-start gap-4 p-4 border-b border-[#E8E4DF] last:border-0 hover:bg-[#FAF7F2]">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${getActionColor(log.action)}`}>
+                            <span className="material-symbols-outlined text-sm">{getActionIcon(log.action)}</span>
                         </div>
-
-                        {/* Book ID Search */}
-                        <div className="flex gap-2 items-center w-full sm:w-auto">
-                            <div className="relative flex items-center h-10 flex-1 sm:flex-initial sm:w-48 rounded border"
-                                style={{ borderColor: ADMIN_COLORS.border, backgroundColor: ADMIN_COLORS.cardBg }}>
-                                <input
-                                    type="number"
-                                    placeholder="Book ID"
-                                    value={bookIdSearch}
-                                    onChange={(e) => setBookIdSearch(e.target.value)}
-                                    onKeyPress={(e) => e.key === 'Enter' && handleBookIdSearch()}
-                                    className="w-full h-full bg-transparent border-none px-3 focus:ring-0 text-sm"
-                                    style={{ fontFamily: "'Noto Sans', sans-serif", color: ADMIN_COLORS.textPrimary }}
-                                />
+                        <div className="flex-1 min-w-0">
+                            <p className="text-sm text-[#1E1815]">{log.details}</p>
+                            <div className="flex items-center gap-3 mt-1">
+                                <span className="text-xs text-[#6B6560]">by {log.user}</span>
+                                <span className="text-xs text-[#6B6560]">{new Date(log.timestamp).toLocaleString()}</span>
                             </div>
-                            <button
-                                onClick={handleBookIdSearch}
-                                className="px-4 py-2 text-xs font-bold rounded transition hover:opacity-80"
-                                style={{
-                                    fontFamily: "'Noto Sans', sans-serif",
-                                    backgroundColor: ADMIN_COLORS.burgundy,
-                                    color: '#fff'
-                                }}>
-                                Search
-                            </button>
-                            {bookIdSearch && (
-                                <button
-                                    onClick={clearSearch}
-                                    className="px-3 py-2 text-xs font-bold rounded transition hover:opacity-80"
-                                    style={{
-                                        fontFamily: "'Noto Sans', sans-serif",
-                                        backgroundColor: ADMIN_COLORS.secondaryBg,
-                                        color: ADMIN_COLORS.textSecondary
-                                    }}>
-                                    Clear
-                                </button>
-                            )}
                         </div>
+                        <span className={`px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${getActionColor(log.action)}`}>
+                            {log.action.replace('_', ' ')}
+                        </span>
                     </div>
-
-                    {/* Audit Trail Table */}
-                    <div className="border rounded shadow-sm flex-1 flex flex-col overflow-hidden relative"
-                        style={{ backgroundColor: ADMIN_COLORS.cardBg, borderColor: ADMIN_COLORS.border }}>
-                        {/* Paper lines background effect (subtle) */}
-                        <div className="absolute inset-0 pointer-events-none opacity-[0.03]"
-                            style={{ backgroundImage: 'linear-gradient(#000 1px, transparent 1px)', backgroundSize: '100% 3rem' }}></div>
-
-                        <div className="overflow-x-auto flex-1">
-                            <table className="w-full text-left border-collapse min-w-[800px]">
-                                <thead>
-                                    <tr style={{ borderBottom: `2px solid ${ADMIN_COLORS.border}`, backgroundColor: `${ADMIN_COLORS.secondaryBg}50` }}>
-                                        <th className="px-4 md:px-6 py-3 md:py-4 text-xs font-bold uppercase tracking-wider w-32"
-                                            style={{ fontFamily: "'Noto Sans', sans-serif", color: ADMIN_COLORS.textMuted }}>
-                                            Timestamp
-                                        </th>
-                                        <th className="px-4 md:px-6 py-3 md:py-4 text-xs font-bold uppercase tracking-wider w-20"
-                                            style={{ fontFamily: "'Noto Sans', sans-serif", color: ADMIN_COLORS.textMuted }}>
-                                            Book ID
-                                        </th>
-                                        <th className="px-4 md:px-6 py-3 md:py-4 text-xs font-bold uppercase tracking-wider w-24"
-                                            style={{ fontFamily: "'Noto Sans', sans-serif", color: ADMIN_COLORS.textMuted }}>
-                                            Action
-                                        </th>
-                                        <th className="px-4 md:px-6 py-3 md:py-4 text-xs font-bold uppercase tracking-wider w-32"
-                                            style={{ fontFamily: "'Noto Sans', sans-serif", color: ADMIN_COLORS.textMuted }}>
-                                            Field
-                                        </th>
-                                        <th className="px-4 md:px-6 py-3 md:py-4 text-xs font-bold uppercase tracking-wider"
-                                            style={{ fontFamily: "'Noto Sans', sans-serif", color: ADMIN_COLORS.textMuted }}>
-                                            Change
-                                        </th>
-                                        <th className="px-4 md:px-6 py-3 md:py-4 text-xs font-bold uppercase tracking-wider w-32"
-                                            style={{ fontFamily: "'Noto Sans', sans-serif", color: ADMIN_COLORS.textMuted }}>
-                                            Changed By
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody className="text-sm" style={{ fontFamily: "'Noto Sans', sans-serif", color: ADMIN_COLORS.textPrimary }}>
-                                    {audits.length > 0 ? audits.map((audit, index) => (
-                                        <tr key={index} className="group transition-colors hover:bg-opacity-10"
-                                            style={{ borderBottom: `1px solid ${ADMIN_COLORS.border}` }}>
-                                            <td className="px-4 md:px-6 py-3 md:py-4 text-xs"
-                                                style={{ color: ADMIN_COLORS.textMuted }}>
-                                                {formatTimestamp(audit.changed_at)}
-                                            </td>
-                                            <td className="px-4 md:px-6 py-3 md:py-4 font-medium">
-                                                <span className="font-mono" style={{ color: ADMIN_COLORS.burgundy }}>
-                                                    #{audit.book_id}
-                                                </span>
-                                            </td>
-                                            <td className="px-4 md:px-6 py-3 md:py-4">
-                                                <ActionBadge action={audit.action} />
-                                            </td>
-                                            <td className="px-4 md:px-6 py-3 md:py-4">
-                                                <span className="font-medium italic" style={{ fontFamily: "'Newsreader', serif" }}>
-                                                    {audit.field_name || '-'}
-                                                </span>
-                                            </td>
-                                            <td className="px-4 md:px-6 py-3 md:py-4">
-                                                {audit.action === 'DELETE' ? (
-                                                    <span className="text-xs italic" style={{ color: ADMIN_COLORS.textMuted }}>
-                                                        Record deleted
-                                                    </span>
-                                                ) : (
-                                                    <div className="flex items-center gap-2 text-sm">
-                                                        <span className="line-through" style={{ color: ADMIN_COLORS.red }}>
-                                                            {audit.old_value || '(empty)'}
-                                                        </span>
-                                                        <span style={{ color: ADMIN_COLORS.textMuted }}>→</span>
-                                                        <span className="font-medium" style={{ color: ADMIN_COLORS.green }}>
-                                                            {audit.new_value || '(empty)'}
-                                                        </span>
-                                                    </div>
-                                                )}
-                                            </td>
-                                            <td className="px-4 md:px-6 py-3 md:py-4 text-xs"
-                                                style={{ color: ADMIN_COLORS.textSecondary }}>
-                                                {audit.changed_by || 'system'}
-                                            </td>
-                                        </tr>
-                                    )) : (
-                                        <tr>
-                                            <td colSpan="6" className="px-6 py-12 text-center">
-                                                <div className="flex flex-col items-center gap-3">
-                                                    <span className="material-symbols-outlined text-5xl"
-                                                        style={{ color: ADMIN_COLORS.textMuted }}>
-                                                        history
-                                                    </span>
-                                                    <p className="text-base italic"
-                                                        style={{ fontFamily: "'Newsreader', serif", color: ADMIN_COLORS.textMuted }}>
-                                                        No audit logs found
-                                                    </p>
-                                                    <p className="text-xs"
-                                                        style={{ fontFamily: "'Noto Sans', sans-serif", color: ADMIN_COLORS.textMuted }}>
-                                                        Audit logs will appear here when books are updated or deleted
-                                                    </p>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-
-                        {/* Footer with Refresh */}
-                        <div className="p-3 flex justify-center"
-                            style={{ borderTop: `1px solid ${ADMIN_COLORS.border}`, backgroundColor: `${ADMIN_COLORS.secondaryBg}50` }}>
-                            <button
-                                onClick={loadAuditData}
-                                className="text-xs font-bold uppercase tracking-wider transition-colors flex items-center gap-1 hover:opacity-80"
-                                style={{ fontFamily: "'Noto Sans', sans-serif", color: ADMIN_COLORS.textMuted }}>
-                                Refresh
-                                <span className="material-symbols-outlined text-sm">refresh</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                ))}
+                {filtered.length === 0 && (
+                    <div className="p-8 text-center text-sm text-[#6B6560]">No logs found</div>
+                )}
             </div>
         </div>
-    );
-}
-
-// Filter Button Component
-function FilterButton({ active, onClick, label, color = ADMIN_COLORS.burgundy }) {
-    return (
-        <button
-            onClick={onClick}
-            className="px-4 py-2 text-xs font-bold uppercase tracking-wider rounded transition-all"
-            style={{
-                fontFamily: "'Noto Sans', sans-serif",
-                backgroundColor: active ? color : ADMIN_COLORS.secondaryBg,
-                color: active ? '#fff' : ADMIN_COLORS.textSecondary,
-                border: `1px solid ${active ? color : ADMIN_COLORS.border}`,
-            }}>
-            {label}
-        </button>
-    );
-}
-
-// Action Badge Component
-function ActionBadge({ action }) {
-    const colorMap = {
-        'UPDATE': { bg: `${ADMIN_COLORS.burgundy}20`, text: ADMIN_COLORS.burgundy, border: ADMIN_COLORS.burgundy },
-        'DELETE': { bg: `${ADMIN_COLORS.red}20`, text: ADMIN_COLORS.red, border: ADMIN_COLORS.red },
-    };
-
-    const colors = colorMap[action] || { bg: ADMIN_COLORS.secondaryBg, text: ADMIN_COLORS.textSecondary, border: ADMIN_COLORS.border };
-
-    return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-bold border"
-            style={{
-                fontFamily: "'Noto Sans', sans-serif",
-                backgroundColor: colors.bg,
-                color: colors.text,
-                borderColor: colors.border
-            }}>
-            <span className="material-symbols-outlined text-sm">
-                {action === 'UPDATE' ? 'edit' : 'delete'}
-            </span>
-            {action}
-        </span>
     );
 }

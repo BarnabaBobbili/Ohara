@@ -4,6 +4,8 @@ import { logActivity } from '../db/activityLogger.js';
 import { logBookUpdate, logBookDeletion } from '../db/auditLogger.js';
 import { parseSkipLimitPagination } from '../utils/pagination.js';
 import { invalidateCacheByPrefix } from '../utils/cache.js';
+import { authenticateToken, requireAdmin } from '../middleware/auth.js';
+import { syncBookToNeo4j } from '../db/neo4j.js';
 
 const router = express.Router();
 
@@ -78,7 +80,7 @@ router.get('/:id', async (req, res) => {
     }
 });
 
-router.post('/', async (req, res) => {
+router.post('/', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const {
             isbn, title, author, publisher, publication_year, category,
@@ -115,6 +117,7 @@ router.post('/', async (req, res) => {
             book_author: book.author,
             isbn: book.isbn,
         });
+        syncBookToNeo4j(book).catch(() => {});
 
         invalidateAnalyticsCache();
         res.status(201).json(book);
@@ -123,7 +126,7 @@ router.post('/', async (req, res) => {
     }
 });
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const bookId = Number.parseInt(req.params.id, 10);
 
@@ -157,13 +160,14 @@ router.put('/:id', async (req, res) => {
             data: updateData,
         });
 
-        logBookUpdate(bookId, oldBookData, newBookData, 'admin');
+        logBookUpdate(bookId, oldBookData, newBookData, req.actor?.email || 'admin');
         logActivity({
             action: 'book_updated',
             book_id: bookId,
             book_title: newBookData.title,
             fields_changed: Object.keys(updateData),
         });
+        syncBookToNeo4j(newBookData).catch(() => {});
 
         invalidateAnalyticsCache();
         res.json(newBookData);
@@ -172,7 +176,7 @@ router.put('/:id', async (req, res) => {
     }
 });
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const bookId = Number.parseInt(req.params.id, 10);
 
@@ -204,7 +208,7 @@ router.delete('/:id', async (req, res) => {
             book_author: bookInfo.author,
             isbn: bookInfo.isbn,
         });
-        logBookDeletion(bookInfo.id, bookInfo, 'admin');
+        logBookDeletion(bookInfo.id, bookInfo, req.actor?.email || 'admin');
 
         invalidateAnalyticsCache();
         res.json({ message: 'Book deleted successfully' });

@@ -1,62 +1,109 @@
-// Member Dashboard - Exact copy from Stitch reader's_personal_sanctuary_dashboard
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+// Member Dashboard — dynamic data from API
+import { useEffect, useState, useCallback } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import Header from '../components/Header';
 import { getAuthState } from '../services/authStore';
+import { circulationAPI, membersAPI, recommendationsAPI } from '../services/api';
+
+function getGreeting() {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    return 'Good evening';
+}
+
+function DaysLeft({ dueDate }) {
+    const days = Math.ceil((new Date(dueDate) - new Date()) / (1000 * 60 * 60 * 24));
+    if (days < 0) return <span className="text-red-600 font-bold">{Math.abs(days)}d overdue</span>;
+    if (days === 0) return <span className="text-orange-600 font-bold">Due today</span>;
+    return <span className={days <= 3 ? 'text-orange-500 font-medium' : 'text-slate-500'}>{days}d left</span>;
+}
 
 export default function MemberDashboard() {
     const [authState, setAuthState] = useState(getAuthState());
     const navigate = useNavigate();
 
-    // Check authentication on mount
+    const [memberProfile, setMemberProfile] = useState(null);
+    const [activeLoans, setActiveLoans]     = useState([]);
+    const [history, setHistory]             = useState([]);
+    const [recommended, setRecommended]     = useState([]);
+    const [loading, setLoading]             = useState(true);
+
+    const greeting  = getGreeting();
+    const firstName = memberProfile?.name?.split(' ')[0] || authState.user?.name?.split(' ')[0] || 'Reader';
+
     useEffect(() => {
         const state = getAuthState();
         if (!state.isAuthenticated) {
             navigate('/login');
-        } else {
-            setAuthState(state);
+            return;
         }
+        setAuthState(state);
     }, [navigate]);
 
-    // Extract first name from full name for greeting
-    const firstName = authState.user?.name?.split(' ')[0] || 'User';
-    const greeting = 'Good evening'; // Could be dynamic based on time of day
+    const loadDashboard = useCallback(async () => {
+        setLoading(true);
+        try {
+            const [loans, hist] = await Promise.all([
+                circulationAPI.getMyLoans().catch(() => []),
+                circulationAPI.getMyHistory({ limit: 6 }).catch(() => []),
+            ]);
+            const loansArr = Array.isArray(loans) ? loans : [];
+            const histArr  = Array.isArray(hist)  ? hist  : [];
+
+            setActiveLoans(loansArr);
+            setHistory(histArr);
+
+            // If we have a book, get related recommendations
+            if (loansArr.length > 0 && loansArr[0].book?.id) {
+                recommendationsAPI.getRelated(loansArr[0].book.id, 4)
+                    .then(r => setRecommended(Array.isArray(r) ? r : []))
+                    .catch(() => {});
+            } else {
+                recommendationsAPI.getPopular(4)
+                    .then(r => setRecommended(Array.isArray(r) ? r : []))
+                    .catch(() => {});
+            }
+        } catch {
+            /* silent */
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (authState.isAuthenticated) loadDashboard();
+    }, [authState.isAuthenticated, loadDashboard]);
+
+    // Derived stats
+    const currentRead = activeLoans[0] || null;
+    const dueSoonBook = activeLoans.find(l => {
+        const days = Math.ceil((new Date(l.due_date) - new Date()) / (1000 * 60 * 60 * 24));
+        return days <= 3;
+    }) || null;
+    const totalBorrowed  = history.length;
+    const totalReturned  = history.filter(h => h.status === 'returned').length;
+    const totalActive    = activeLoans.length;
+    const overdueCount   = activeLoans.filter(l => new Date(l.due_date) < new Date()).length;
 
     return (
         <>
-            <style>
-                {`
-          /* Custom scrollbar for a cleaner look */
-          ::-webkit-scrollbar {
-              width: 8px;
-          }
-          ::-webkit-scrollbar-track {
-              background: transparent;
-          }
-          ::-webkit-scrollbar-thumb {
-              background-color: #e2e8f0;
-              border-radius: 20px;
-          }
-          /* Hand-drawn line effect for progress bar */
-          .hand-drawn-line {
-              border-radius: 2px 255px 25px 25px / 255px 25px 225px 255px;
-          }
-          .hand-drawn-border {
-               border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
-          }
-        `}
-            </style>
+            <style>{`
+              ::-webkit-scrollbar { width: 8px; }
+              ::-webkit-scrollbar-track { background: transparent; }
+              ::-webkit-scrollbar-thumb { background-color: #e2e8f0; border-radius: 20px; }
+              .hand-drawn-line { border-radius: 2px 255px 25px 25px / 255px 25px 225px 255px; }
+              .hand-drawn-border { border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px; }
+            `}</style>
 
             <Header />
             <div className="flex h-screen w-full overflow-hidden bg-[#fdfbf7] dark:bg-[#111621] text-[#1e293b] dark:text-gray-100 transition-colors duration-300 pt-24"
                 style={{ fontFamily: "'Epilogue', 'Noto Sans', sans-serif" }}>
 
-                {/* Removed sidebar - now full width main content */}
-
-                {/* Main Content Area - Full Width without sidebar */}
                 <main className="flex-1 h-full overflow-y-auto overflow-x-hidden p-6 md:p-12 relative">
                     <div className="max-w-[1400px] mx-auto flex flex-col gap-10">
-                        {/* Page Heading & Context */}
+
+                        {/* Header */}
                         <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
                             <div className="flex flex-col gap-2">
                                 <h1 className="text-3xl md:text-5xl font-bold text-[#1e293b] dark:text-white leading-tight tracking-tight">
@@ -64,206 +111,264 @@ export default function MemberDashboard() {
                                 </h1>
                                 <p className="text-gray-500 dark:text-gray-400 text-lg font-light flex items-center gap-2">
                                     <span className="material-symbols-outlined text-orange-300">local_cafe</span>
-                                    The kettle is on.
+                                    {loading ? 'Loading your library…' : activeLoans.length === 0 ? 'Your shelf is clear — time to explore.' : `${activeLoans.length} book${activeLoans.length > 1 ? 's' : ''} checked out.`}
                                 </p>
                             </div>
                             <div className="hidden md:block">
                                 <span className="text-sm font-medium text-gray-400 bg-white dark:bg-gray-800 px-3 py-1 rounded-full border border-gray-100 dark:border-gray-700 shadow-sm">
-                                    Last sync: Just now
+                                    {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
                                 </span>
                             </div>
                         </header>
 
-                        {/* Top Layout: Hero Card + Sidebar Stats */}
-                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
-                            {/* Main Hero: Current Read (Span 8) */}
-                            <div className="lg:col-span-8 flex flex-col h-full">
-                                <h2 className="text-lg font-semibold text-[#1e293b] dark:text-gray-200 mb-4 flex items-center gap-2">
-                                    <span className="material-symbols-outlined text-[#2463eb]">menu_book</span>
-                                    Current Read
-                                </h2>
-                                <div className="relative group bg-white dark:bg-[#1a202c] rounded-2xl p-6 md:p-8 shadow-[0_4px_20px_-2px_rgba(0,0,0,0.05)] flex flex-col md:flex-row gap-8 items-start hover:shadow-lg transition-shadow duration-300 h-full">
-                                    {/* Book Cover with Elevation */}
-                                    <div className="relative shrink-0 w-32 md:w-48 aspect-[2/3] rounded-lg shadow-lg rotate-1 group-hover:rotate-0 transition-transform duration-500 ease-out origin-bottom-left"
-                                        style={{ backgroundImage: "url('https://lh3.googleusercontent.com/aida-public/AB6AXuChnd1elz7IVOLZYclIu9UijAFYiZIdbgY7AKQQSfk0x6nFjjf4hhDkADYvm_O47W_s6PN77YlFbASjK4AUGjibxfLg1ffxEWL3t4X3LlGGOWqyLbiwI0IKYXbNccKvSgYek0-c9CIk877EZ8aTvru9sLGoXsWNX437ZpphVPIMjobzvhbgbC3MXgOC_QEiZ_N386RunDYbu9FpggMGpeSBQlYw6j8Wl0qZ6NZ67okZgXIhLkVXdqtuaXXi3eAx3QB6UiKs7_gl87cx')", backgroundSize: 'cover', backgroundPosition: 'center' }}>
-                                        <div className="absolute inset-0 bg-gradient-to-tr from-black/20 to-transparent rounded-lg"></div>
-                                    </div>
+                        {loading ? (
+                            <div className="flex items-center justify-center py-24 text-gray-400 animate-pulse text-xl">
+                                Loading your reading world…
+                            </div>
+                        ) : (
+                            <>
+                                {/* Top Layout: Current Read + Sidebar */}
+                                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
 
-                                    {/* Book Details */}
-                                    <div className="flex flex-col justify-between h-full w-full py-2">
-                                        <div>
-                                            <div className="flex justify-between items-start">
-                                                <div>
-                                                    <h3 className="text-2xl md:text-3xl font-bold text-[#1e293b] dark:text-white mb-2 leading-tight">
-                                                        The Invisible Life of Addie La Rue
-                                                    </h3>
-                                                    <p className="text-gray-500 dark:text-gray-400 text-lg italic" style={{ fontFamily: "'Epilogue', serif" }}>
-                                                        by V.E. Schwab
-                                                    </p>
+                                    {/* Current Read */}
+                                    <div className="lg:col-span-8 flex flex-col h-full">
+                                        <h2 className="text-lg font-semibold text-[#1e293b] dark:text-gray-200 mb-4 flex items-center gap-2">
+                                            <span className="material-symbols-outlined text-[#2463eb]">menu_book</span>
+                                            Current Read
+                                        </h2>
+                                        {currentRead ? (
+                                            <div className="relative group bg-white dark:bg-[#1a202c] rounded-2xl p-6 md:p-8 shadow-[0_4px_20px_-2px_rgba(0,0,0,0.05)] flex flex-col md:flex-row gap-8 items-start hover:shadow-lg transition-shadow duration-300 h-full">
+                                                {/* Cover */}
+                                                <div className="relative shrink-0 w-32 md:w-48 aspect-[2/3] rounded-lg shadow-lg rotate-1 group-hover:rotate-0 transition-transform duration-500 ease-out origin-bottom-left overflow-hidden bg-gray-200">
+                                                    {currentRead.book?.cover_image_url ? (
+                                                        <img
+                                                            src={currentRead.book.cover_image_url}
+                                                            alt={currentRead.book.title}
+                                                            className="w-full h-full object-cover"
+                                                        />
+                                                    ) : (
+                                                        <div className="w-full h-full bg-gradient-to-br from-[#2463eb] to-[#7c3aed] flex items-end p-3">
+                                                            <p className="text-white font-bold italic text-sm leading-tight">{currentRead.book?.title}</p>
+                                                        </div>
+                                                    )}
+                                                    <div className="absolute inset-0 bg-gradient-to-tr from-black/20 to-transparent rounded-lg" />
                                                 </div>
-                                                <button className="text-gray-300 hover:text-red-400 transition-colors">
-                                                    <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>favorite</span>
-                                                </button>
+
+                                                {/* Details */}
+                                                <div className="flex flex-col justify-between h-full w-full py-2">
+                                                    <div>
+                                                        <div className="flex justify-between items-start">
+                                                            <div>
+                                                                <h3 className="text-2xl md:text-3xl font-bold text-[#1e293b] dark:text-white mb-2 leading-tight">
+                                                                    {currentRead.book?.title}
+                                                                </h3>
+                                                                <p className="text-gray-500 dark:text-gray-400 text-lg italic">
+                                                                    by {currentRead.book?.author || '—'}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="mt-4 flex items-center gap-3 text-sm text-gray-500 flex-wrap">
+                                                            {currentRead.book?.category && (
+                                                                <span className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-xs font-semibold uppercase tracking-wide">
+                                                                    {currentRead.book.category}
+                                                                </span>
+                                                            )}
+                                                            <span className="flex items-center gap-1">
+                                                                <span className="material-symbols-outlined text-[16px]">event</span>
+                                                                Due: {new Date(currentRead.due_date).toLocaleDateString()}
+                                                            </span>
+                                                            <DaysLeft dueDate={currentRead.due_date} />
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="mt-8 md:mt-auto">
+                                                        {/* Status */}
+                                                        <div className="mb-3 text-sm font-medium text-gray-500">
+                                                            Status: <span className={`font-bold ${currentRead.status === 'overdue' ? 'text-red-600' : 'text-emerald-600'}`}>
+                                                                {currentRead.status === 'checked_out' ? 'Checked out' : currentRead.status}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex flex-wrap gap-3">
+                                                            <Link to="/catalog"
+                                                                className="bg-[#2463eb] hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg text-sm font-medium shadow-md shadow-blue-500/20 transition-all flex items-center gap-2">
+                                                                <span>Browse More Books</span>
+                                                                <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
+                                                            </Link>
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             </div>
-                                            <div className="mt-6 flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
-                                                <span className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-xs font-semibold uppercase tracking-wide">Fantasy</span>
-                                                <span className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-xs font-semibold uppercase tracking-wide">Historical</span>
-                                                <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[16px]">timer</span> 4h 20m left</span>
+                                        ) : (
+                                            <div className="bg-white dark:bg-[#1a202c] rounded-2xl p-8 shadow-sm flex flex-col items-center justify-center gap-4 h-full min-h-[260px] text-center">
+                                                <span className="material-symbols-outlined text-6xl text-gray-300">library_books</span>
+                                                <p className="text-gray-500 text-xl font-medium">No books currently checked out.</p>
+                                                <Link to="/catalog"
+                                                    className="bg-[#2463eb] text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-blue-700 transition-all">
+                                                    Explore the Catalog
+                                                </Link>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Right: Stats + Due Soon */}
+                                    <div className="lg:col-span-4 flex flex-col gap-6 h-full">
+                                        {/* Collection Stats */}
+                                        <div className="bg-white dark:bg-[#1a202c] rounded-2xl p-6 shadow-sm">
+                                            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">Your Library</h3>
+                                            <div className="grid grid-cols-2 gap-3">
+                                                {[
+                                                    { icon: 'book_2',      value: totalActive,    label: 'Active Loans' },
+                                                    { icon: 'done_all',    value: totalReturned,  label: 'Returned' },
+                                                    { icon: 'history',     value: totalBorrowed,  label: 'Total Borrows' },
+                                                    { icon: 'warning',     value: overdueCount,   label: 'Overdue', danger: overdueCount > 0 },
+                                                ].map(stat => (
+                                                    <div key={stat.label} className={`p-3 rounded-xl flex flex-col gap-1 border ${stat.danger && stat.value > 0 ? 'bg-red-50 border-red-100 dark:bg-red-900/20 dark:border-red-800/30' : 'bg-gray-50 dark:bg-gray-800/50 border-gray-100 dark:border-gray-700'}`}>
+                                                        <span className={`material-symbols-outlined text-[20px] ${stat.danger && stat.value > 0 ? 'text-red-500' : 'text-gray-400'}`}>{stat.icon}</span>
+                                                        <span className={`text-2xl font-bold ${stat.danger && stat.value > 0 ? 'text-red-600' : 'text-[#1e293b] dark:text-white'}`}>{stat.value}</span>
+                                                        <span className="text-xs text-gray-500">{stat.label}</span>
+                                                    </div>
+                                                ))}
                                             </div>
                                         </div>
 
-                                        {/* Custom Progress Bar Section */}
-                                        <div className="mt-8 md:mt-auto">
-                                            <div className="flex justify-between items-end mb-2">
-                                                <span className="text-sm font-medium text-[#1e293b] dark:text-gray-300">Page 142 of 300</span>
-                                                <span className="text-2xl font-bold text-[#2463eb]">47%</span>
+                                        {/* Due Soon Alert */}
+                                        {dueSoonBook ? (
+                                            <div className="bg-white dark:bg-[#1a202c] border-l-4 border-[#7D3C3C] rounded-r-xl shadow-sm p-5 flex flex-col justify-between flex-1">
+                                                <div className="flex justify-between items-start mb-3">
+                                                    <h3 className="text-md font-semibold text-[#7D3C3C] flex items-center gap-2">
+                                                        <span className="material-symbols-outlined text-[20px]">event_busy</span>
+                                                        Due Soon
+                                                    </h3>
+                                                    <DaysLeft dueDate={dueSoonBook.due_date} />
+                                                </div>
+                                                <div className="flex gap-4 items-center">
+                                                    <div className="w-12 h-16 rounded overflow-hidden shrink-0 bg-gray-200">
+                                                        {dueSoonBook.book?.cover_image_url ? (
+                                                            <img src={dueSoonBook.book.cover_image_url} alt="" className="w-full h-full object-cover" />
+                                                        ) : (
+                                                            <div className="w-full h-full bg-gradient-to-br from-[#7D3C3C] to-[#c0392b]" />
+                                                        )}
+                                                    </div>
+                                                    <div>
+                                                        <p className="font-medium text-[#1e293b] dark:text-white leading-tight">{dueSoonBook.book?.title}</p>
+                                                        <p className="text-xs text-gray-500 mt-0.5">{dueSoonBook.book?.author}</p>
+                                                    </div>
+                                                </div>
                                             </div>
-                                            <div className="relative h-3 w-full bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
-                                                <div className="absolute top-0 left-0 h-full bg-[#2463eb] hand-drawn-line" style={{ width: '47%' }}></div>
-                                                <div className="absolute inset-0 opacity-20" style={{ backgroundImage: "url('https://www.transparenttextures.com/patterns/graphy.png')" }}></div>
+                                        ) : (
+                                            <div className="bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 rounded-xl p-5 flex items-center gap-3 flex-1">
+                                                <span className="material-symbols-outlined text-emerald-500 text-3xl">check_circle</span>
+                                                <div>
+                                                    <p className="font-semibold text-emerald-800 dark:text-emerald-400">All clear!</p>
+                                                    <p className="text-sm text-emerald-600">No books due soon.</p>
+                                                </div>
                                             </div>
-                                            <div className="mt-6 flex flex-wrap gap-3">
-                                                <button className="bg-[#2463eb] hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg text-sm font-medium shadow-md shadow-blue-500/20 transition-all flex items-center gap-2">
-                                                    <span>Continue Reading</span>
-                                                    <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
-                                                </button>
-                                                <button className="bg-transparent border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-[#1e293b] dark:text-gray-300 px-4 py-2.5 rounded-lg text-sm font-medium transition-all">
-                                                    View Notes (12)
-                                                </button>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Middle: All Active Loans (if more than 1) */}
+                                {activeLoans.length > 1 && (
+                                    <section>
+                                        <h2 className="text-lg font-semibold text-[#1e293b] dark:text-gray-200 mb-4 flex items-center gap-2">
+                                            <span className="material-symbols-outlined text-[#2463eb]">checklist</span>
+                                            All Active Loans
+                                        </h2>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                            {activeLoans.map(loan => (
+                                                <div key={loan.id} className="bg-white dark:bg-[#1a202c] rounded-xl p-4 flex gap-4 shadow-sm border border-gray-100 dark:border-gray-700">
+                                                    <div className="w-10 h-14 rounded overflow-hidden shrink-0 bg-gray-200">
+                                                        {loan.book?.cover_image_url ? (
+                                                            <img src={loan.book.cover_image_url} alt="" className="w-full h-full object-cover" />
+                                                        ) : (
+                                                            <div className="w-full h-full bg-gradient-to-br from-gray-400 to-gray-600" />
+                                                        )}
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="font-semibold text-sm truncate">{loan.book?.title}</p>
+                                                        <p className="text-xs text-gray-500 truncate">{loan.book?.author}</p>
+                                                        <p className="text-xs mt-1">
+                                                            <DaysLeft dueDate={loan.due_date} />
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </section>
+                                )}
+
+                                {/* Bottom: History + Recommendations */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                                    {/* Borrowing History */}
+                                    <div className="lg:col-span-2 flex flex-col justify-between bg-white dark:bg-[#1a202c] rounded-2xl p-6 shadow-sm">
+                                        <div className="flex justify-between items-center mb-4">
+                                            <h2 className="text-lg font-semibold text-[#1e293b] dark:text-gray-200">Recent History</h2>
+                                            <Link to="/catalog" className="text-sm text-[#2463eb] hover:text-blue-700 font-medium">Browse Catalog</Link>
+                                        </div>
+                                        {history.length === 0 ? (
+                                            <p className="text-gray-400 italic text-sm">No borrowing history yet.</p>
+                                        ) : (
+                                            <div className="flex flex-col gap-2">
+                                                {history.slice(0, 5).map(tx => (
+                                                    <div key={tx.id} className="flex items-center gap-3 py-2 border-b border-gray-50 dark:border-gray-800 last:border-0">
+                                                        <div className="w-8 h-11 rounded overflow-hidden shrink-0 bg-gray-200">
+                                                            {tx.book?.cover_image_url ? (
+                                                                <img src={tx.book.cover_image_url} alt="" className="w-full h-full object-cover" />
+                                                            ) : (
+                                                                <div className="w-full h-full bg-gradient-to-br from-gray-300 to-gray-500" />
+                                                            )}
+                                                        </div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="font-medium text-sm truncate">{tx.book?.title}</p>
+                                                            <p className="text-xs text-gray-500">{new Date(tx.checkout_date).toLocaleDateString()}</p>
+                                                        </div>
+                                                        <span className={`text-xs font-bold uppercase px-2 py-0.5 rounded-full ${
+                                                            tx.status === 'returned' ? 'bg-emerald-100 text-emerald-700' :
+                                                            tx.status === 'overdue'  ? 'bg-red-100 text-red-600'      :
+                                                            'bg-blue-100 text-blue-700'
+                                                        }`}>
+                                                            {tx.status === 'checked_out' ? 'Active' : tx.status}
+                                                        </span>
+                                                    </div>
+                                                ))}
                                             </div>
-                                        </div>
+                                        )}
                                     </div>
-                                </div>
-                            </div>
 
-                            {/* Right Column: Vertical Streak + Due Soon (Span 4) */}
-                            <div className="lg:col-span-4 flex flex-col gap-6 h-full">
-                                {/* Reading Streak Card */}
-                                <div className="bg-orange-50/50 dark:bg-orange-900/10 border border-orange-100 dark:border-orange-800/30 rounded-2xl p-6 flex flex-col items-center justify-center text-center relative overflow-hidden group min-h-[200px]">
-                                    <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
-                                        <span className="material-symbols-outlined text-9xl text-orange-500">local_fire_department</span>
-                                    </div>
-                                    <div className="relative z-10 flex flex-col items-center gap-2">
-                                        <div className="bg-white dark:bg-gray-800 p-3 rounded-full shadow-sm mb-2">
-                                            <span className="material-symbols-outlined text-orange-500 text-3xl">local_fire_department</span>
-                                        </div>
-                                        <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Reading Streak</h3>
-                                        <div className="flex items-baseline gap-1">
-                                            <span className="text-5xl font-bold text-[#1e293b] dark:text-white tracking-tighter">32</span>
-                                            <span className="text-lg font-medium text-gray-400">days</span>
-                                        </div>
-                                        <p className="text-sm text-green-600 font-medium mt-1 bg-green-50 dark:bg-green-900/30 px-2 py-0.5 rounded-md border border-green-100 dark:border-green-900/50">
-                                            +1 from yesterday
-                                        </p>
-                                    </div>
-                                </div>
-
-                                {/* Due Soon Alert */}
-                                <div className="bg-white dark:bg-[#1a202c] border-l-4 border-[#7D3C3C] dark:border-red-900 rounded-r-xl shadow-[0_4px_20px_-2px_rgba(0,0,0,0.05)] p-5 flex flex-col justify-between flex-1">
-                                    <div className="flex justify-between items-start mb-3">
-                                        <h3 className="text-md font-semibold text-[#7D3C3C] dark:text-red-400 flex items-center gap-2">
-                                            <span className="material-symbols-outlined text-[20px]">event_busy</span>
-                                            Due Soon
-                                        </h3>
-                                        <span className="text-xs text-gray-400">2 days left</span>
-                                    </div>
-                                    <div className="flex gap-4 items-center">
-                                        <div className="w-12 h-16 bg-gray-200 rounded overflow-hidden shrink-0"
-                                            style={{ backgroundImage: "url('https://lh3.googleusercontent.com/aida-public/AB6AXuCkKpJjm4PCwl35Actdx0Gh3VtEgd9DEmP2_W3yk6hmTss1NW6nbhF7T1xtB_J1lQBWZBsznJIFRtofP2qiYehUMvQbLtQslwaZG_bapNo8ALayZ1vUWm9ogWFA1ZuxwdxRBZWGuaFpAG7kbgItlLWanHh5NWrhxQYJ03aP-5QOH4aozrhKznRyeP6nZijJBdBAJLsFeImd7jHdla_SZDuTwDL699xh7r89H_ETrHcIuvQMdLnYPMF0YNJ_aJ8OQwwuGpf99iuuQXh3')", backgroundSize: 'cover' }}>
-                                        </div>
-                                        <div>
-                                            <p className="font-medium text-[#1e293b] dark:text-white leading-tight">Atomic Habits</p>
-                                            <p className="text-xs text-gray-500 mt-1">James Clear</p>
-                                        </div>
-                                    </div>
-                                    <button className="mt-4 w-full text-xs font-medium text-[#7D3C3C] dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 py-2 rounded transition-colors text-center border border-red-100 dark:border-red-900/30">
-                                        Renew Loan
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Middle Section: Asymmetrical Split */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                            {/* Librarian's Note (Span 1 - Distinct Style) */}
-                            <div className="lg:col-span-1">
-                                <div className="bg-[#fcf8e8] dark:bg-[#2c2a20] rounded-tl-sm rounded-br-sm rounded-tr-2xl rounded-bl-2xl shadow-md p-6 h-full border border-yellow-100/50 relative rotate-1 hover:rotate-0 transition-transform duration-300">
-                                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-gray-300 h-8 w-2 rounded-full z-10 opacity-50"></div>
-                                    <h3 className="italic text-xl text-gray-800 dark:text-yellow-100 mb-4 flex items-center gap-2 border-b border-gray-800/10 dark:border-yellow-100/10 pb-2"
-                                        style={{ fontFamily: "'Epilogue', serif" }}>
-                                        <span className="material-symbols-outlined text-[20px]">edit_note</span>
-                                        Librarian's Note
-                                    </h3>
-                                    <p className="text-lg text-gray-700 dark:text-gray-300 leading-relaxed" style={{ fontFamily: "'Epilogue', serif" }}>
-                                        "Hi Clara! Since you've been diving into historical fantasy lately (and loved <span className="underline decoration-dotted decoration-gray-400">Circe</span>), I really think you should try <strong>The Night Circus</strong> next. It has that same magical atmosphere you seem to enjoy."
-                                    </p>
-                                    <div className="mt-6 flex items-center justify-between">
-                                        <span className="text-xs font-mono text-gray-500 uppercase">Curated by Sarah</span>
-                                        <button className="text-sm font-bold text-[#2463eb] hover:underline">View Book</button>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Your Collection Stats (Span 2) */}
-                            <div className="lg:col-span-2 flex flex-col justify-between bg-white dark:bg-[#1a202c] rounded-2xl p-6 shadow-[0_4px_20px_-2px_rgba(0,0,0,0.05)]">
-                                <div className="flex justify-between items-center mb-6">
-                                    <h2 className="text-lg font-semibold text-[#1e293b] dark:text-gray-200">Your Collection</h2>
-                                    <button className="text-sm text-[#2463eb] hover:text-blue-700 font-medium">View All Shelves</button>
-                                </div>
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                                    <div className="p-4 rounded-xl bg-gray-50 dark:bg-gray-800/50 flex flex-col gap-2 border border-gray-100 dark:border-gray-700">
-                                        <div className="text-gray-400 dark:text-gray-500 mb-1">
-                                            <span className="material-symbols-outlined text-[24px]">book_2</span>
-                                        </div>
-                                        <span className="text-2xl font-bold text-[#1e293b] dark:text-white">12</span>
-                                        <span className="text-xs text-gray-500">Borrowed</span>
-                                    </div>
-                                    <div className="p-4 rounded-xl bg-gray-50 dark:bg-gray-800/50 flex flex-col gap-2 border border-gray-100 dark:border-gray-700">
-                                        <div className="text-gray-400 dark:text-gray-500 mb-1">
-                                            <span className="material-symbols-outlined text-[24px]">pause_circle</span>
-                                        </div>
-                                        <span className="text-2xl font-bold text-[#1e293b] dark:text-white">3</span>
-                                        <span className="text-xs text-gray-500">On Hold</span>
-                                    </div>
-                                    <div className="p-4 rounded-xl bg-gray-50 dark:bg-gray-800/50 flex flex-col gap-2 border border-gray-100 dark:border-gray-700">
-                                        <div className="text-gray-400 dark:text-gray-500 mb-1">
-                                            <span className="material-symbols-outlined text-[24px]">done_all</span>
-                                        </div>
-                                        <span className="text-2xl font-bold text-[#1e293b] dark:text-white">48</span>
-                                        <span className="text-xs text-gray-500">Completed</span>
-                                    </div>
-                                    <div className="p-4 rounded-xl bg-gray-50 dark:bg-gray-800/50 flex flex-col gap-2 border border-gray-100 dark:border-gray-700">
-                                        <div className="text-gray-400 dark:text-gray-500 mb-1">
-                                            <span className="material-symbols-outlined text-[24px]">bookmark</span>
-                                        </div>
-                                        <span className="text-2xl font-bold text-[#1e293b] dark:text-white">156</span>
-                                        <span className="text-xs text-gray-500">Saved</span>
+                                    {/* Recommendations */}
+                                    <div className="flex flex-col bg-white dark:bg-[#1a202c] rounded-2xl p-6 shadow-sm gap-4">
+                                        <h2 className="text-lg font-semibold text-[#1e293b] dark:text-gray-200">You Might Like</h2>
+                                        {recommended.length === 0 ? (
+                                            <p className="text-gray-400 italic text-sm">Explore the catalog to get recommendations.</p>
+                                        ) : (
+                                            <div className="flex flex-col gap-3">
+                                                {recommended.slice(0, 4).map((book, idx) => (
+                                                    <Link key={book.id || idx} to={`/book/${book.id}`}
+                                                        className="flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg p-1.5 transition-colors">
+                                                        <div className="w-8 h-11 rounded overflow-hidden shrink-0 bg-gray-200">
+                                                            {book.cover_image_url ? (
+                                                                <img src={book.cover_image_url} alt="" className="w-full h-full object-cover" />
+                                                            ) : (
+                                                                <div className="w-full h-full bg-gradient-to-br from-purple-400 to-blue-500" />
+                                                            )}
+                                                        </div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="font-medium text-sm truncate">{book.title}</p>
+                                                            <p className="text-xs text-gray-500 truncate">{book.author}</p>
+                                                        </div>
+                                                        <span className="material-symbols-outlined text-[#2463eb] text-[18px] opacity-0 group-hover:opacity-100">arrow_forward</span>
+                                                    </Link>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
 
-                                {/* Mini Recent Shelf Visual */}
-                                <div className="mt-8">
-                                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Recently Added</p>
-                                    <div className="flex -space-x-3 overflow-hidden py-2 px-1">
-                                        <div className="w-10 h-10 rounded-full border-2 border-white dark:border-gray-800 bg-gray-200 bg-cover bg-center shadow-sm"
-                                            style={{ backgroundImage: "url('https://lh3.googleusercontent.com/aida-public/AB6AXuAkTjdFs4qMT5Vxoslo043sw0X91Ao79F3VJ6dS9HpnBIur0KBa54XRVlCNtAPeXyYP83x1eSKp-mHyJjnfIw902xrh3ZuKAeMXThrtWH2GRcqr7CiW-pg1dFkoHCtUsmrrgdhNbJ6d1-H0_j0Iez6b99jy3Z0AVs0lqbYthzbqHmir9iuPhn81dAjy0yD4J9eaGAVriSkGOmE0acb2giONb3N6OMFc4q6L6BK8ywSt8sLq2y7ODErz8nbXZNgjihhKGs9XHucnJt4P')" }}>
-                                        </div>
-                                        <div className="w-10 h-10 rounded-full border-2 border-white dark:border-gray-800 bg-gray-300 bg-cover bg-center shadow-sm"
-                                            style={{ backgroundImage: "url('https://lh3.googleusercontent.com/aida-public/AB6AXuB768gmhmHcXM7ksNB72wVe_V__xUNRVcLfZWcBbtA3VqZQo9w0FHz8LUmnUf7cOTolX8H7QJJKjOlwZlrtzvhujmeKxuouOd_5fYONuhioDipoYBNsx30CreSD8V18tN20gGB3zfDVD0zwBasbAY8Xrn9dMIWp7t9pLego4o1HibwS-NI6251LzVud5GHZcWvG5hz2q4f46WFx0ppc42KkMY-9kZ8g6ZORo3NbXkcg2hpvezwBMjftnxYuhLfngdGYHREGyHSvsV3w')" }}>
-                                        </div>
-                                        <div className="w-10 h-10 rounded-full border-2 border-white dark:border-gray-800 bg-gray-400 bg-cover bg-center shadow-sm"
-                                            style={{ backgroundImage: "url('https://lh3.googleusercontent.com/aida-public/AB6AXuDFrEJHvCygAOhpUU4JxTRcdrOPy4G-siVlZTxS3xw2TuRuBa3GyxiQJh-TRERBaHwzgkTainKj3ttLXisHhd7GE6vIdoiHXhbqP4j10fA9fxMw88mm6P6UdXNbL3Wd5ehZXd6nC9KJrVrNJS1qguEludsIYYK72j33hXkmG_900Hy91kDiyjwKWjbAWPxKgtetHKbievuao_JVj8QLPB2sTuGvsJx1noOUM8TpDdNRIEfZVlMKHVQCCQChNPgpgL8-PJQX03VebVbv')" }}>
-                                        </div>
-                                        <div className="w-10 h-10 rounded-full border-2 border-white dark:border-gray-800 bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-500 shadow-sm">
-                                            +2
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                            </>
+                        )}
 
-                        {/* Footer breathing room */}
-                        <div className="h-8"></div>
+                        {/* Footer room */}
+                        <div className="h-8" />
                     </div>
                 </main>
             </div>

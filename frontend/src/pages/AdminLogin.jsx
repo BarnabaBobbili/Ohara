@@ -1,17 +1,15 @@
-// Login Page - Editorial Design
+// Admin Login Page
 import { useState } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { authAPI } from '../services/api';
 import { setAuthState } from '../services/authStore';
 
-export default function Login() {
+export default function AdminLogin() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const navigate = useNavigate();
-    const location = useLocation();
-    const from = location.state?.from || null;
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -22,21 +20,21 @@ export default function Login() {
             // Call login API
             const response = await authAPI.login({ email, password });
 
-            // Save auth state
-            setAuthState(response.access_token, response.user || null);
-
+            // Check if user has admin/staff role
             const role = response.user?.role || 'member';
             const isAdmin = role === 'admin' || role === 'staff';
 
-            // If they came from a specific page (e.g. /admin), honour it
-            // Otherwise: admins go to /admin, members go to /dashboard
-            if (from) {
-                navigate(from, { replace: true });
-            } else if (isAdmin) {
-                navigate('/admin', { replace: true });
-            } else {
-                navigate('/dashboard', { replace: true });
+            if (!isAdmin) {
+                setError('Access denied. Admin or staff credentials required.');
+                setLoading(false);
+                return;
             }
+
+            // Save auth state
+            setAuthState(response.access_token, response.user || null);
+
+            // Navigate to admin dashboard
+            navigate('/admin', { replace: true });
         } catch (err) {
             console.error('Login error:', err);
             setError(err.message || 'Invalid email or password');
@@ -66,15 +64,15 @@ export default function Login() {
                 <div className="w-full max-w-md relative z-10">
                     {/* Logo */}
                     <Link to="/" className="flex items-center justify-center gap-3 mb-8 group">
-                        <span className="material-symbols-outlined text-[#c16549] text-4xl">auto_stories</span>
+                        <span className="material-symbols-outlined text-[#c16549] text-4xl">admin_panel_settings</span>
                         <div className="text-center">
                             <h1 className="text-2xl font-bold text-[#1E1815] dark:text-white tracking-tight group-hover:text-[#c16549] transition-colors"
                                 style={{ fontFamily: "'Newsreader', serif" }}>
-                                Ohara
+                                Ohara Admin
                             </h1>
                             <p className="text-xs text-[#6B6560] dark:text-gray-400 tracking-wider"
                                 style={{ fontFamily: "'Noto Sans', sans-serif" }}>
-                                Tree of Knowledge
+                                Administrative Portal
                             </p>
                         </div>
                     </Link>
@@ -83,13 +81,16 @@ export default function Login() {
                     <div className="bg-white dark:bg-[#1a1614] rounded-2xl shadow-xl p-8 md:p-10 border border-[#E8E4DF] dark:border-white/10">
                         {/* Header */}
                         <div className="text-center mb-8">
+                            <div className="inline-flex items-center justify-center w-16 h-16 bg-[#c16549]/10 rounded-full mb-4">
+                                <span className="material-symbols-outlined text-[#c16549] text-3xl">shield</span>
+                            </div>
                             <h2 className="text-3xl md:text-4xl font-bold text-[#1E1815] dark:text-white mb-2"
                                 style={{ fontFamily: "'Newsreader', serif" }}>
-                                Welcome Back
+                                Admin Access
                             </h2>
                             <p className="text-[#6B6560] dark:text-gray-400"
                                 style={{ fontFamily: "'Noto Sans', sans-serif" }}>
-                                Enter your sanctuary
+                                Enter your admin credentials
                             </p>
                         </div>
 
@@ -110,7 +111,7 @@ export default function Login() {
                                     className="block text-sm font-medium text-[#1E1815] dark:text-white mb-2"
                                     style={{ fontFamily: "'Noto Sans', sans-serif" }}
                                 >
-                                    Email Address
+                                    Admin Email
                                 </label>
                                 <input
                                     id="email"
@@ -120,7 +121,7 @@ export default function Login() {
                                     onChange={(e) => setEmail(e.target.value)}
                                     disabled={loading}
                                     className="w-full px-4 py-3 bg-[#FAF7F2] dark:bg-[#1e1614] border border-[#E8E4DF] dark:border-white/10 rounded-lg text-[#1E1815] dark:text-white placeholder:text-[#6B6560]/60 focus:outline-none focus:ring-2 focus:ring-[#c16549]/20 focus:border-[#c16549] transition-all disabled:opacity-50"
-                                    placeholder="reader@example.com"
+                                    placeholder="admin@library.com"
                                     style={{ fontFamily: "'Noto Sans', sans-serif" }}
                                 />
                             </div>
@@ -147,27 +148,6 @@ export default function Login() {
                                 />
                             </div>
 
-                            {/* Remember & Forgot */}
-                            <div className="flex items-center justify-between text-sm">
-                                <label className="flex items-center gap-2 cursor-pointer group">
-                                    <input
-                                        type="checkbox"
-                                        className="w-4 h-4 rounded border-[#E8E4DF] text-[#c16549] focus:ring-[#c16549]/20"
-                                        disabled={loading}
-                                    />
-                                    <span className="text-[#6B6560] dark:text-gray-400 group-hover:text-[#1E1815] dark:group-hover:text-white transition-colors"
-                                        style={{ fontFamily: "'Noto Sans', sans-serif" }}>
-                                        Remember me
-                                    </span>
-                                </label>
-                                <Link
-                                    to="/forgot-password"
-                                    className="text-[#c16549] hover:underline"
-                                    style={{ fontFamily: "'Noto Sans', sans-serif" }}
-                                >
-                                    Forgot password?
-                                </Link>
-                            </div>
                             {/* Submit Button */}
                             <button
                                 type="submit"
@@ -175,45 +155,32 @@ export default function Login() {
                                 className="w-full bg-[#c16549] hover:bg-[#a0523b] text-white py-3 rounded-lg font-semibold text-base transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 group disabled:opacity-50 disabled:cursor-not-allowed"
                                 style={{ fontFamily: "'Noto Sans', sans-serif" }}
                             >
-                                <span>{loading ? 'Signing in...' : 'Sign In'}</span>
-                                {!loading && (
-                                    <span className="material-symbols-outlined text-lg group-hover:translate-x-1 transition-transform">arrow_forward</span>
-                                )}
+                                <span className="material-symbols-outlined text-lg">login</span>
+                                <span>{loading ? 'Verifying...' : 'Access Admin Panel'}</span>
                             </button>
                         </form>
 
-                        {/* Divider */}
-                        <div className="relative my-8">
-                            <div className="absolute inset-0 flex items-center">
-                                <div className="w-full border-t border-[#E8E4DF] dark:border-white/10"></div>
-                            </div>
-                            <div className="relative flex justify-center text-sm">
-                                <span className="px-4 bg-white dark:bg-[#1a1614] text-[#6B6560] dark:text-gray-400"
+                        {/* Security Notice */}
+                        <div className="mt-6 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                            <div className="flex gap-3">
+                                <span className="material-symbols-outlined text-amber-600 dark:text-amber-400 text-sm mt-0.5">info</span>
+                                <p className="text-xs text-amber-800 dark:text-amber-200"
                                     style={{ fontFamily: "'Noto Sans', sans-serif" }}>
-                                    New to Ohara?
-                                </span>
+                                    This is a secure area. All login attempts are monitored and logged.
+                                </p>
                             </div>
                         </div>
-
-                        {/* Sign Up Link */}
-                        <Link
-                            to="/signup"
-                            className="w-full block text-center py-3 border border-[#E8E4DF] dark:border-white/10 rounded-lg text-[#1E1815] dark:text-white hover:bg-[#FAF7F2] dark:hover:bg-[#1e1614] font-medium transition-all"
-                            style={{ fontFamily: "'Noto Sans', sans-serif" }}
-                        >
-                            Create an Account
-                        </Link>
                     </div>
 
                     {/* Footer Links */}
                     <div className="flex justify-between items-center mt-8 text-sm">
                         <Link
-                            to="/admin-login"
+                            to="/login"
                             className="text-[#6B6560] dark:text-gray-400 hover:text-[#c16549] transition-colors inline-flex items-center gap-1"
                             style={{ fontFamily: "'Noto Sans', sans-serif" }}
                         >
-                            <span className="material-symbols-outlined text-sm">admin_panel_settings</span>
-                            Admin Login
+                            <span className="material-symbols-outlined text-sm">person</span>
+                            Member Login
                         </Link>
                         <Link
                             to="/"

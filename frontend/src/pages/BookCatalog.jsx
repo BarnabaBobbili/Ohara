@@ -1,99 +1,58 @@
-import React, { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaBook, FaSearch, FaFilter, FaSortAmountDown } from 'react-icons/fa';
 import Header from '../components/Header';
-import { BACKEND_ORIGIN } from '../config/api';
-
-const BACKEND_URL = BACKEND_ORIGIN;
+import { booksAPI } from '../services/api';
 
 export default function BookCatalog() {
     const [books, setBooks] = useState([]);
     const [loading, setLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [sortBy, setSortBy] = useState('title');
-    const [filterSource, setFilterSource] = useState('all');
+    const [filterCategory, setFilterCategory] = useState('all');
     const navigate = useNavigate();
 
     useEffect(() => {
-        loadDefaultBooks();
+        loadBooks();
     }, []);
 
-    const loadDefaultBooks = async () => {
+    const loadBooks = async (search = '') => {
         setLoading(true);
         try {
-            // Single API call - backend searches all sources in parallel
-            const response = await fetch(
-                `${BACKEND_URL}/api/external-books/search?q=popular fiction`
-            );
-
-            if (response.ok) {
-                const data = await response.json();
-                setBooks(data.results || []);
-                console.log(`Loaded ${data.results?.length || 0} books`);
+            const params = { limit: 120 };
+            if (search.trim()) {
+                params.search = search.trim();
             }
+
+            const data = await booksAPI.getAll(params);
+            setBooks(Array.isArray(data) ? data : []);
         } catch (error) {
             console.error('Error loading books:', error);
+            setBooks([]);
         } finally {
             setLoading(false);
         }
     };
 
     const handleSearch = async () => {
-        if (!searchQuery.trim()) {
-            loadDefaultBooks();
-            return;
-        }
-
-        setLoading(true);
-        try {
-            const response = await fetch(
-                `${BACKEND_URL}/api/external-books/search?q=${encodeURIComponent(searchQuery)}`
-            );
-            if (response.ok) {
-                const data = await response.json();
-                setBooks(data.results || []);
-            }
-        } catch (error) {
-            console.error('Search error:', error);
-        } finally {
-            setLoading(false);
-        }
+        await loadBooks(searchQuery);
     };
 
     const handleBookClick = (book) => {
-        // Use a unified /book/:id route for all books
-        // For external books, use source-sourceId as the ID
-        const bookId = `${book.source}-${book.source_id}`;
-        navigate(`/book/${bookId}`, { state: { book, isExternal: true } });
+        navigate(`/book/${book.id}`, { state: { book } });
     };
 
-    const filteredBooks = books.filter(book => {
-        if (filterSource === 'all') return true;
-        return book.source === filterSource;
+    const filteredBooks = filterCategory === 'all'
+        ? books
+        : books.filter((book) => (book.category || 'Uncategorized') === filterCategory);
+
+    const sortedBooks = [...filteredBooks].sort((left, right) => {
+        if (sortBy === 'author') return (left.author || '').localeCompare(right.author || '');
+        if (sortBy === 'year') return (right.publication_year || 0) - (left.publication_year || 0);
+        return (left.title || '').localeCompare(right.title || '');
     });
 
-    const sortedBooks = [...filteredBooks].sort((a, b) => {
-        switch (sortBy) {
-            case 'title':
-                return (a.title || '').localeCompare(b.title || '');
-            case 'author':
-                return (a.author || '').localeCompare(b.author || '');
-            case 'source':
-                return (a.source || '').localeCompare(b.source || '');
-            default:
-                return 0;
-        }
-    });
-
-    const getSourceBadge = (source) => {
-        const badges = {
-            gutenberg: { label: 'Gutenberg', color: 'bg-green-100 text-green-800' },
-            internet_archive: { label: 'Archive.org', color: 'bg-blue-100 text-blue-800' },
-            openlibrary: { label: 'Open Library', color: 'bg-purple-100 text-purple-800' },
-            google_books: { label: 'Google Books', color: 'bg-yellow-100 text-yellow-800' },
-        };
-        return badges[source] || { label: source, color: 'bg-gray-100 text-gray-800' };
-    };
+    const categories = ['all', ...new Set(books.map((book) => book.category || 'Uncategorized'))];
 
     if (loading && books.length === 0) {
         return (
@@ -118,10 +77,10 @@ export default function BookCatalog() {
                 <div className="container mx-auto px-4 max-w-7xl">
                     <div className="text-center mb-12">
                         <h1 className="text-4xl md:text-5xl font-bold text-[#1E1815] dark:text-white mb-4">
-                            Free Book Catalog
+                            Library Catalog
                         </h1>
                         <p className="text-[#4A4540] dark:text-gray-300 max-w-2xl mx-auto">
-                            Browse millions of free books from Project Gutenberg, Internet Archive, and more. {sortedBooks.length} books displayed.
+                            Browse the library&apos;s holdings by title, author, or category. {sortedBooks.length} books displayed.
                         </p>
                     </div>
 
@@ -131,10 +90,10 @@ export default function BookCatalog() {
                                 <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
                                 <input
                                     type="text"
-                                    placeholder="Search by title, author, or subject..."
+                                    placeholder="Search by title, author, or ISBN..."
                                     value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                                    onChange={(event) => setSearchQuery(event.target.value)}
+                                    onKeyDown={(event) => event.key === 'Enter' && handleSearch()}
                                     className="w-full pl-12 pr-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-[#1E1815] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#c16549]"
                                 />
                             </div>
@@ -150,15 +109,15 @@ export default function BookCatalog() {
                             <div className="flex items-center gap-2">
                                 <FaFilter className="text-gray-400" />
                                 <select
-                                    value={filterSource}
-                                    onChange={(e) => setFilterSource(e.target.value)}
+                                    value={filterCategory}
+                                    onChange={(event) => setFilterCategory(event.target.value)}
                                     className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-[#1E1815] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#c16549]"
                                 >
-                                    <option value="all">All Sources</option>
-                                    <option value="gutenberg">Project Gutenberg</option>
-                                    <option value="internet_archive">Internet Archive</option>
-                                    <option value="openlibrary">Open Library</option>
-                                    <option value="google_books">Google Books</option>
+                                    {categories.map((category) => (
+                                        <option key={category} value={category}>
+                                            {category === 'all' ? 'All Categories' : category}
+                                        </option>
+                                    ))}
                                 </select>
                             </div>
 
@@ -166,12 +125,12 @@ export default function BookCatalog() {
                                 <FaSortAmountDown className="text-gray-400" />
                                 <select
                                     value={sortBy}
-                                    onChange={(e) => setSortBy(e.target.value)}
+                                    onChange={(event) => setSortBy(event.target.value)}
                                     className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-[#1E1815] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#c16549]"
                                 >
                                     <option value="title">Sort by Title</option>
                                     <option value="author">Sort by Author</option>
-                                    <option value="source">Sort by Source</option>
+                                    <option value="year">Sort by Year</option>
                                 </select>
                             </div>
 
@@ -184,26 +143,22 @@ export default function BookCatalog() {
                     {sortedBooks.length === 0 ? (
                         <div className="text-center py-12">
                             <FaBook className="mx-auto text-6xl text-gray-400 mb-4" />
-                            <p className="text-gray-500">No books found. Try a different search or filter.</p>
+                            <p className="text-gray-500">No books found. Try a different search or category.</p>
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                            {sortedBooks.map((book, idx) => (
+                            {sortedBooks.map((book) => (
                                 <div
-                                    key={`${book.source}-${book.source_id}-${idx}`}
+                                    key={book.id}
                                     className="bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-xl transition-shadow cursor-pointer overflow-hidden"
                                     onClick={() => handleBookClick(book)}
                                 >
                                     <div className="h-64 bg-gray-200 dark:bg-gray-700 flex items-center justify-center overflow-hidden">
-                                        {book.cover_url ? (
+                                        {book.cover_image_url ? (
                                             <img
-                                                src={book.cover_url}
+                                                src={book.cover_image_url}
                                                 alt={book.title}
                                                 className="h-full w-full object-cover"
-                                                onError={(e) => {
-                                                    e.target.style.display = 'none';
-                                                    e.target.parentElement.innerHTML = '<div class="flex items-center justify-center w-full h-full"><svg class="w-24 h-24 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path d="M9 4.804A7.968 7.968 0 005.5 4c-1.255 0-2.443.29-3.5.804v10A7.969 7.969 0 015.5 14c1.669 0 3.218.51 4.5 1.385A7.962 7.962 0 0114.5 14c1.255 0 2.443.29 3.5.804v-10A7.968 7.968 0 0014.5 4c-1.255 0-2.443.29-3.5.804V12a1 1 0 11-2 0V4.804z"/></svg></div>';
-                                                }}
                                             />
                                         ) : (
                                             <FaBook className="text-gray-400 text-6xl" />
@@ -219,26 +174,17 @@ export default function BookCatalog() {
                                         </p>
 
                                         <div className="flex flex-wrap gap-2 mb-3">
-                                            <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getSourceBadge(book.source).color}`}>
-                                                {getSourceBadge(book.source).label}
+                                            <span className="px-2 py-1 text-xs font-semibold rounded-full bg-[#c16549]/10 text-[#8b4d3f]">
+                                                {book.category || 'Uncategorized'}
                                             </span>
-                                            {book.is_public_domain && (
-                                                <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                                                    🟢 Free
-                                                </span>
-                                            )}
-                                            {book.can_borrow && (
-                                                <span className="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
-                                                    🟡 Borrow
-                                                </span>
-                                            )}
+                                            <span className={`px-2 py-1 text-xs font-semibold rounded-full ${book.available_copies > 0 ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}`}>
+                                                {book.available_copies > 0 ? `${book.available_copies} available` : 'Checked out'}
+                                            </span>
                                         </div>
 
-                                        {book.formats && book.formats.length > 0 && (
-                                            <div className="text-xs text-gray-500 dark:text-gray-400">
-                                                {book.formats.slice(0, 3).join(', ').toUpperCase()}
-                                            </div>
-                                        )}
+                                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                                            {book.publication_year ? `Published ${book.publication_year}` : 'Publication year unavailable'}
+                                        </div>
                                     </div>
                                 </div>
                             ))}
