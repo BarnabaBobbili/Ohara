@@ -1,332 +1,216 @@
-import { ADMIN_COLORS } from '../../styles/adminTheme';
 import { useState, useEffect } from 'react';
 import { auditAPI } from '../../services/api';
+import { formatIST } from '../../utils/dateFormat';
 
 export default function AuditTrail() {
-    const [audits, setAudits] = useState([]);
+    const [logs, setLogs] = useState([]);
+    const [filter, setFilter] = useState('all');
+    const [search, setSearch] = useState('');
     const [loading, setLoading] = useState(true);
-    const [filter, setFilter] = useState('all'); // 'all', 'UPDATE', 'DELETE'
-    const [bookIdSearch, setBookIdSearch] = useState('');
-    const [pagination, setPagination] = useState({ limit: 50, offset: 0 });
 
     useEffect(() => {
-        loadAuditData();
-    }, [filter, pagination]);
+        fetchAuditLogs();
+    }, []);
 
-    const loadAuditData = async () => {
+    const fetchAuditLogs = async () => {
         try {
             setLoading(true);
-            let data;
+            const response = await auditAPI.getAllAudits(100, 0);
+            setLogs(response.logs || []);
+        } catch (error) {
+            console.error('Failed to fetch audit logs:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
 
-            if (filter === 'all') {
-                data = await auditAPI.getAllAudits(pagination.limit, pagination.offset);
-            } else {
-                data = await auditAPI.getAuditsByAction(filter, pagination.limit);
+    const getActionIcon = (action) => {
+        const icons = {
+            UPDATE: 'edit',
+            DELETE: 'delete',
+            CREATE: 'add_circle',
+            INSERT: 'add_circle',
+        };
+        return icons[action] || 'info';
+    };
+
+    const getActionColor = (action) => {
+        if (action === 'INSERT' || action === 'CREATE') return 'bg-green-100 text-green-700';
+        if (action === 'DELETE') return 'bg-red-100 text-red-700';
+        if (action === 'UPDATE') return 'bg-blue-100 text-blue-700';
+        return 'bg-gray-100 text-gray-700';
+    };
+
+    // Helper to parse JSON value and extract meaningful info
+    const parseRecordValue = (value) => {
+        if (!value) return null;
+        try {
+            const parsed = JSON.parse(value);
+            return {
+                title: parsed.title,
+                author: parsed.author,
+                isbn: parsed.isbn,
+                publisher: parsed.publisher,
+                format: parsed.format,
+                total_copies: parsed.total_copies,
+            };
+        } catch {
+            return null;
+        }
+    };
+
+    // Format display value based on action and field
+    const formatDisplayValue = (log, isOldValue) => {
+        const value = isOldValue ? log.old_value : log.new_value;
+        
+        // For complete_record (INSERT/DELETE), show summary instead of full JSON
+        if (log.field_name === 'complete_record') {
+            const parsed = parseRecordValue(value);
+            if (parsed) {
+                const parts = [];
+                if (parsed.title) parts.push(`"${parsed.title}"`);
+                if (parsed.author) parts.push(`by ${parsed.author}`);
+                if (parsed.isbn) parts.push(`(ISBN: ${parsed.isbn})`);
+                return parts.join(' ') || 'Book record';
             }
-
-            setAudits(data.logs || []);
-        } catch (error) {
-            console.error('Failed to load audit data:', error);
-            setAudits([]);
-        } finally {
-            setLoading(false);
         }
-    };
-
-    const handleBookIdSearch = async () => {
-        if (!bookIdSearch.trim()) {
-            loadAuditData();
-            return;
+        
+        // For regular fields, return value as-is but truncate if too long
+        if (value && value.length > 100) {
+            return value.substring(0, 100) + '...';
         }
+        return value;
+    };
 
-        try {
-            setLoading(true);
-            const data = await auditAPI.getBookAudit(parseInt(bookIdSearch), 100);
-            setAudits(data.logs || []);
-        } catch (error) {
-            console.error('Failed to search audit:', error);
-            setAudits([]);
-        } finally {
-            setLoading(false);
+    // Get description text based on action type
+    const getActionDescription = (log) => {
+        if (log.action === 'INSERT') {
+            const parsed = parseRecordValue(log.new_value);
+            if (parsed?.title) {
+                return `Added: "${parsed.title}"${parsed.author ? ` by ${parsed.author}` : ''}`;
+            }
+            return 'New book added';
         }
+        if (log.action === 'DELETE') {
+            const parsed = parseRecordValue(log.old_value);
+            if (parsed?.title) {
+                return `Deleted: "${parsed.title}"${parsed.author ? ` by ${parsed.author}` : ''}`;
+            }
+            return 'Book deleted';
+        }
+        return log.field_name;
     };
 
-    const formatTimestamp = (timestamp) => {
-        if (!timestamp) return '';
-        const date = new Date(timestamp);
-        return date.toLocaleString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-        });
-    };
+    const filtered = logs.filter(log => {
+        const searchLower = search.toLowerCase();
+        const matchSearch = 
+            log.field_name?.toLowerCase().includes(searchLower) || 
+            log.changed_by?.toLowerCase().includes(searchLower) ||
+            log.book_title?.toLowerCase().includes(searchLower) ||
+            log.book_isbn?.toLowerCase().includes(searchLower) ||
+            log.old_value?.toLowerCase().includes(searchLower) ||
+            log.new_value?.toLowerCase().includes(searchLower);
+        const matchFilter = filter === 'all' || log.action === filter;
+        return matchSearch && matchFilter;
+    });
 
-    const clearSearch = () => {
-        setBookIdSearch('');
-        loadAuditData();
-    };
-
-    if (loading && audits.length === 0) {
+    if (loading) {
         return (
-            <div className="flex items-center justify-center h-screen" style={{ backgroundColor: ADMIN_COLORS.primaryBg }}>
-                <div className="text-center">
-                    <div className="animate-spin rounded-full h-16 w-16 border-b-2 mx-auto mb-4" style={{ borderColor: ADMIN_COLORS.burgundy }}></div>
-                    <p style={{ color: ADMIN_COLORS.textMuted }}>Loading audit trail...</p>
-                </div>
+            <div className="p-6 flex items-center justify-center min-h-[400px]">
+                <span className="material-symbols-outlined text-4xl text-[#c16549] animate-spin">refresh</span>
             </div>
         );
     }
 
     return (
-        <div className="flex flex-col min-h-screen" style={{ backgroundColor: ADMIN_COLORS.primaryBg }}>
-            {/* Top Header */}
-            <header className="flex-shrink-0 px-4 sm:px-6 md:px-8 py-4 sm:py-6 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-3 sm:gap-0"
-                style={{ borderBottom: `1px solid ${ADMIN_COLORS.border}`, backgroundColor: ADMIN_COLORS.cardBg }}>
-                <div className="flex flex-col gap-1">
-                    <p className="text-xs font-medium uppercase tracking-wider" style={{ fontFamily: "'Noto Sans', sans-serif", color: ADMIN_COLORS.textMuted }}>
-                        Change History
-                    </p>
-                    <h2 className="text-2xl sm:text-3xl font-semibold italic" style={{ fontFamily: "'Newsreader', serif", color: ADMIN_COLORS.textPrimary }}>
-                        Audit Trail
-                    </h2>
+        <div className="p-6">
+            {/* Header */}
+            <div className="mb-6">
+                <div className="flex items-center gap-2 mb-1">
+                    <div className="h-[2px] w-8 bg-[#c16549]"></div>
+                    <span className="text-[10px] font-bold tracking-[0.15em] uppercase text-[#c16549]">System</span>
                 </div>
-                <div className="flex flex-col items-start sm:items-end gap-1">
-                    <p className="text-base sm:text-lg" style={{ fontFamily: "'Newsreader', serif", color: ADMIN_COLORS.textPrimary }}>
-                        {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-                    </p>
-                    <p className="text-sm" style={{ fontFamily: "'Noto Sans', sans-serif", color: ADMIN_COLORS.textMuted }}>
-                        Complete modification log
-                    </p>
+                <h1 className="text-3xl font-bold text-[#1E1815]">Audit Trail</h1>
+            </div>
+
+            {/* Filters */}
+            <div className="flex items-center gap-4 mb-6">
+                <div className="flex-1 relative">
+                    <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#6B6560] text-lg">search</span>
+                    <input
+                        type="text"
+                        placeholder="Search logs..."
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 border border-[#E8E4DF] bg-white text-sm focus:border-[#c16549] focus:outline-none"
+                    />
                 </div>
-            </header>
+                <select value={filter} onChange={(e) => setFilter(e.target.value)} className="px-4 py-2 border border-[#E8E4DF] bg-white text-sm focus:border-[#c16549] focus:outline-none">
+                    <option value="all">All Actions</option>
+                    <option value="UPDATE">Updates</option>
+                    <option value="DELETE">Deletions</option>
+                    <option value="INSERT">Insertions</option>
+                </select>
+            </div>
 
-            {/* Scrollable Content */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:px-8">
-                <div className="max-w-7xl mx-auto flex flex-col gap-6">
-                    {/* Filters & Search */}
-                    <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-                        {/* Action Filter Buttons */}
-                        <div className="flex gap-2 flex-wrap">
-                            <FilterButton
-                                active={filter === 'all'}
-                                onClick={() => setFilter('all')}
-                                label="All Changes"
-                            />
-                            <FilterButton
-                                active={filter === 'UPDATE'}
-                                onClick={() => setFilter('UPDATE')}
-                                label="Updates"
-                                color={ADMIN_COLORS.burgundy}
-                            />
-                            <FilterButton
-                                active={filter === 'DELETE'}
-                                onClick={() => setFilter('DELETE')}
-                                label="Deletions"
-                                color={ADMIN_COLORS.red}
-                            />
-                        </div>
-
-                        {/* Book ID Search */}
-                        <div className="flex gap-2 items-center w-full sm:w-auto">
-                            <div className="relative flex items-center h-10 flex-1 sm:flex-initial sm:w-48 rounded border"
-                                style={{ borderColor: ADMIN_COLORS.border, backgroundColor: ADMIN_COLORS.cardBg }}>
-                                <input
-                                    type="number"
-                                    placeholder="Book ID"
-                                    value={bookIdSearch}
-                                    onChange={(e) => setBookIdSearch(e.target.value)}
-                                    onKeyPress={(e) => e.key === 'Enter' && handleBookIdSearch()}
-                                    className="w-full h-full bg-transparent border-none px-3 focus:ring-0 text-sm"
-                                    style={{ fontFamily: "'Noto Sans', sans-serif", color: ADMIN_COLORS.textPrimary }}
-                                />
+            {/* Logs */}
+            <div className="bg-white border border-[#E8E4DF]">
+                {filtered.map((log) => {
+                    const isCompleteRecord = log.field_name === 'complete_record';
+                    const actionDesc = getActionDescription(log);
+                    
+                    return (
+                        <div key={log.id} className="flex items-start gap-4 p-4 border-b border-[#E8E4DF] last:border-0 hover:bg-[#FAF7F2]">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${getActionColor(log.action)}`}>
+                                <span className="material-symbols-outlined text-sm">{getActionIcon(log.action)}</span>
                             </div>
-                            <button
-                                onClick={handleBookIdSearch}
-                                className="px-4 py-2 text-xs font-bold rounded transition hover:opacity-80"
-                                style={{
-                                    fontFamily: "'Noto Sans', sans-serif",
-                                    backgroundColor: ADMIN_COLORS.burgundy,
-                                    color: '#fff'
-                                }}>
-                                Search
-                            </button>
-                            {bookIdSearch && (
-                                <button
-                                    onClick={clearSearch}
-                                    className="px-3 py-2 text-xs font-bold rounded transition hover:opacity-80"
-                                    style={{
-                                        fontFamily: "'Noto Sans', sans-serif",
-                                        backgroundColor: ADMIN_COLORS.secondaryBg,
-                                        color: ADMIN_COLORS.textSecondary
-                                    }}>
-                                    Clear
-                                </button>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Audit Trail Table */}
-                    <div className="border rounded shadow-sm flex-1 flex flex-col overflow-hidden relative"
-                        style={{ backgroundColor: ADMIN_COLORS.cardBg, borderColor: ADMIN_COLORS.border }}>
-                        {/* Paper lines background effect (subtle) */}
-                        <div className="absolute inset-0 pointer-events-none opacity-[0.03]"
-                            style={{ backgroundImage: 'linear-gradient(#000 1px, transparent 1px)', backgroundSize: '100% 3rem' }}></div>
-
-                        <div className="overflow-x-auto flex-1">
-                            <table className="w-full text-left border-collapse min-w-[800px]">
-                                <thead>
-                                    <tr style={{ borderBottom: `2px solid ${ADMIN_COLORS.border}`, backgroundColor: `${ADMIN_COLORS.secondaryBg}50` }}>
-                                        <th className="px-4 md:px-6 py-3 md:py-4 text-xs font-bold uppercase tracking-wider w-32"
-                                            style={{ fontFamily: "'Noto Sans', sans-serif", color: ADMIN_COLORS.textMuted }}>
-                                            Timestamp
-                                        </th>
-                                        <th className="px-4 md:px-6 py-3 md:py-4 text-xs font-bold uppercase tracking-wider w-20"
-                                            style={{ fontFamily: "'Noto Sans', sans-serif", color: ADMIN_COLORS.textMuted }}>
-                                            Book ID
-                                        </th>
-                                        <th className="px-4 md:px-6 py-3 md:py-4 text-xs font-bold uppercase tracking-wider w-24"
-                                            style={{ fontFamily: "'Noto Sans', sans-serif", color: ADMIN_COLORS.textMuted }}>
-                                            Action
-                                        </th>
-                                        <th className="px-4 md:px-6 py-3 md:py-4 text-xs font-bold uppercase tracking-wider w-32"
-                                            style={{ fontFamily: "'Noto Sans', sans-serif", color: ADMIN_COLORS.textMuted }}>
-                                            Field
-                                        </th>
-                                        <th className="px-4 md:px-6 py-3 md:py-4 text-xs font-bold uppercase tracking-wider"
-                                            style={{ fontFamily: "'Noto Sans', sans-serif", color: ADMIN_COLORS.textMuted }}>
-                                            Change
-                                        </th>
-                                        <th className="px-4 md:px-6 py-3 md:py-4 text-xs font-bold uppercase tracking-wider w-32"
-                                            style={{ fontFamily: "'Noto Sans', sans-serif", color: ADMIN_COLORS.textMuted }}>
-                                            Changed By
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody className="text-sm" style={{ fontFamily: "'Noto Sans', sans-serif", color: ADMIN_COLORS.textPrimary }}>
-                                    {audits.length > 0 ? audits.map((audit, index) => (
-                                        <tr key={index} className="group transition-colors hover:bg-opacity-10"
-                                            style={{ borderBottom: `1px solid ${ADMIN_COLORS.border}` }}>
-                                            <td className="px-4 md:px-6 py-3 md:py-4 text-xs"
-                                                style={{ color: ADMIN_COLORS.textMuted }}>
-                                                {formatTimestamp(audit.changed_at)}
-                                            </td>
-                                            <td className="px-4 md:px-6 py-3 md:py-4 font-medium">
-                                                <span className="font-mono" style={{ color: ADMIN_COLORS.burgundy }}>
-                                                    #{audit.book_id}
-                                                </span>
-                                            </td>
-                                            <td className="px-4 md:px-6 py-3 md:py-4">
-                                                <ActionBadge action={audit.action} />
-                                            </td>
-                                            <td className="px-4 md:px-6 py-3 md:py-4">
-                                                <span className="font-medium italic" style={{ fontFamily: "'Newsreader', serif" }}>
-                                                    {audit.field_name || '-'}
-                                                </span>
-                                            </td>
-                                            <td className="px-4 md:px-6 py-3 md:py-4">
-                                                {audit.action === 'DELETE' ? (
-                                                    <span className="text-xs italic" style={{ color: ADMIN_COLORS.textMuted }}>
-                                                        Record deleted
-                                                    </span>
-                                                ) : (
-                                                    <div className="flex items-center gap-2 text-sm">
-                                                        <span className="line-through" style={{ color: ADMIN_COLORS.red }}>
-                                                            {audit.old_value || '(empty)'}
-                                                        </span>
-                                                        <span style={{ color: ADMIN_COLORS.textMuted }}>→</span>
-                                                        <span className="font-medium" style={{ color: ADMIN_COLORS.green }}>
-                                                            {audit.new_value || '(empty)'}
-                                                        </span>
-                                                    </div>
-                                                )}
-                                            </td>
-                                            <td className="px-4 md:px-6 py-3 md:py-4 text-xs"
-                                                style={{ color: ADMIN_COLORS.textSecondary }}>
-                                                {audit.changed_by || 'system'}
-                                            </td>
-                                        </tr>
-                                    )) : (
-                                        <tr>
-                                            <td colSpan="6" className="px-6 py-12 text-center">
-                                                <div className="flex flex-col items-center gap-3">
-                                                    <span className="material-symbols-outlined text-5xl"
-                                                        style={{ color: ADMIN_COLORS.textMuted }}>
-                                                        history
-                                                    </span>
-                                                    <p className="text-base italic"
-                                                        style={{ fontFamily: "'Newsreader', serif", color: ADMIN_COLORS.textMuted }}>
-                                                        No audit logs found
-                                                    </p>
-                                                    <p className="text-xs"
-                                                        style={{ fontFamily: "'Noto Sans', sans-serif", color: ADMIN_COLORS.textMuted }}>
-                                                        Audit logs will appear here when books are updated or deleted
-                                                    </p>
-                                                </div>
-                                            </td>
-                                        </tr>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-sm text-[#1E1815] font-medium">
+                                    {log.book_title ? (
+                                        <>
+                                            <span className="text-[#c16549]">{log.book_title}</span>
+                                            {log.book_isbn && <span className="text-[#6B6560] text-xs ml-2">(ISBN: {log.book_isbn})</span>}
+                                        </>
+                                    ) : (
+                                        <>Book ID: {log.book_id}</>
                                     )}
-                                </tbody>
-                            </table>
+                                    {!isCompleteRecord && <span className="text-[#6B6560]"> — {log.field_name}</span>}
+                                </p>
+                                <p className="text-xs text-[#6B6560] mt-1">
+                                    {isCompleteRecord ? (
+                                        <span className="font-medium">{actionDesc}</span>
+                                    ) : (
+                                        <>
+                                            {log.old_value && (
+                                                <span>
+                                                    From: <span className="font-mono bg-gray-100 px-1">{formatDisplayValue(log, true)}</span>
+                                                </span>
+                                            )}
+                                            {log.old_value && log.new_value && <span className="mx-2">→</span>}
+                                            {log.new_value && (
+                                                <span>
+                                                    To: <span className="font-mono bg-gray-100 px-1">{formatDisplayValue(log, false)}</span>
+                                                </span>
+                                            )}
+                                            {!log.old_value && !log.new_value && <span>Record deleted</span>}
+                                        </>
+                                    )}
+                                </p>
+                                <div className="flex items-center gap-3 mt-1">
+                                    <span className="text-xs text-[#6B6560]">by {log.changed_by}</span>
+                                    <span className="text-xs text-[#6B6560]">{formatIST(log.changed_at)}</span>
+                                </div>
+                            </div>
+                            <span className={`px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${getActionColor(log.action)}`}>
+                                {log.action}
+                            </span>
                         </div>
-
-                        {/* Footer with Refresh */}
-                        <div className="p-3 flex justify-center"
-                            style={{ borderTop: `1px solid ${ADMIN_COLORS.border}`, backgroundColor: `${ADMIN_COLORS.secondaryBg}50` }}>
-                            <button
-                                onClick={loadAuditData}
-                                className="text-xs font-bold uppercase tracking-wider transition-colors flex items-center gap-1 hover:opacity-80"
-                                style={{ fontFamily: "'Noto Sans', sans-serif", color: ADMIN_COLORS.textMuted }}>
-                                Refresh
-                                <span className="material-symbols-outlined text-sm">refresh</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                    );
+                })}
+                {filtered.length === 0 && (
+                    <div className="p-8 text-center text-sm text-[#6B6560]">No audit logs found</div>
+                )}
             </div>
         </div>
-    );
-}
-
-// Filter Button Component
-function FilterButton({ active, onClick, label, color = ADMIN_COLORS.burgundy }) {
-    return (
-        <button
-            onClick={onClick}
-            className="px-4 py-2 text-xs font-bold uppercase tracking-wider rounded transition-all"
-            style={{
-                fontFamily: "'Noto Sans', sans-serif",
-                backgroundColor: active ? color : ADMIN_COLORS.secondaryBg,
-                color: active ? '#fff' : ADMIN_COLORS.textSecondary,
-                border: `1px solid ${active ? color : ADMIN_COLORS.border}`,
-            }}>
-            {label}
-        </button>
-    );
-}
-
-// Action Badge Component
-function ActionBadge({ action }) {
-    const colorMap = {
-        'UPDATE': { bg: `${ADMIN_COLORS.burgundy}20`, text: ADMIN_COLORS.burgundy, border: ADMIN_COLORS.burgundy },
-        'DELETE': { bg: `${ADMIN_COLORS.red}20`, text: ADMIN_COLORS.red, border: ADMIN_COLORS.red },
-    };
-
-    const colors = colorMap[action] || { bg: ADMIN_COLORS.secondaryBg, text: ADMIN_COLORS.textSecondary, border: ADMIN_COLORS.border };
-
-    return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-bold border"
-            style={{
-                fontFamily: "'Noto Sans', sans-serif",
-                backgroundColor: colors.bg,
-                color: colors.text,
-                borderColor: colors.border
-            }}>
-            <span className="material-symbols-outlined text-sm">
-                {action === 'UPDATE' ? 'edit' : 'delete'}
-            </span>
-            {action}
-        </span>
     );
 }

@@ -1,5 +1,27 @@
 // Membership CTA Section - Exact copy from Stitch landing_page_-_membership_cta
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { cmsAPI } from '../../services/api';
+
+const DEFAULT_CONTENT = {
+    headline: 'Begin your journey.',
+    subtitle: 'Unlock intelligent cataloging and rediscover the art of your collection. Curate your legacy, one volume at a time.',
+    button_text: 'Request Access',
+};
+
 export default function MembershipCTA() {
+    const [content, setContent] = useState(DEFAULT_CONTENT);
+
+    useEffect(() => {
+        cmsAPI.getSection('home', 'membership_cta')
+            .then((data) => {
+                if (data) {
+                    setContent({ ...DEFAULT_CONTENT, ...data });
+                }
+            })
+            .catch(() => {});
+    }, []);
+
     return (
         <div className="relative flex flex-col w-full h-auto min-h-[600px] justify-center items-center bg-[#7d2e26] overflow-hidden"
             style={{ fontFamily: "'Newsreader', serif" }}>
@@ -11,19 +33,19 @@ export default function MembershipCTA() {
                 {/* Headlines */}
                 <div className="flex flex-col gap-6">
                     <h2 className="text-4xl md:text-6xl lg:text-7xl font-light italic text-[#fdfbf7] tracking-tight leading-tight drop-shadow-sm">
-                        Begin your journey.
+                        {content.headline}
                     </h2>
                     <p className="text-lg md:text-xl text-[#fdfbf7]/90 max-w-2xl mx-auto font-normal leading-relaxed tracking-wide">
-                        Unlock intelligent cataloging and rediscover the art of your collection. Curate your legacy, one volume at a time.
+                        {content.subtitle}
                     </p>
                 </div>
 
                 {/* CTA Button */}
                 <div className="mt-4">
-                    <button className="group flex items-center justify-center gap-3 h-14 px-8 bg-[#fdfbf7] hover:bg-white text-[#7d2e26] transition-all duration-300 rounded-none shadow-xl hover:shadow-2xl hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-[#fdfbf7] focus:ring-offset-2 focus:ring-offset-[#7d2e26] cursor-pointer min-w-[220px]">
+                    <Link to="/signup" className="group flex items-center justify-center gap-3 h-14 px-8 bg-[#fdfbf7] hover:bg-white text-[#7d2e26] transition-all duration-300 rounded-none shadow-xl hover:shadow-2xl hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-[#fdfbf7] focus:ring-offset-2 focus:ring-offset-[#7d2e26] cursor-pointer min-w-[220px]">
                         <span className="material-symbols-outlined text-[24px] font-normal transition-transform duration-300 group-hover:rotate-12">ink_pen</span>
-                        <span className="text-base font-bold uppercase tracking-widest">Request Access</span>
-                    </button>
+                        <span className="text-base font-bold uppercase tracking-widest">{content.button_text}</span>
+                    </Link>
                 </div>
             </div>
 

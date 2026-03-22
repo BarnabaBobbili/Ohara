@@ -1,7 +1,10 @@
 import 'dotenv/config'
 import { defineConfig } from 'prisma/config'
 
-const migrationUrl = process.env.PRISMA_MIGRATE_DATABASE_URL || process.env.DIRECT_DATABASE_URL
+const migrationUrl =
+    process.env.PRISMA_MIGRATE_DATABASE_URL ||
+    process.env.DIRECT_DATABASE_URL ||
+    process.env.DIRECT_URL
 const datasourceUrl = migrationUrl || process.env.DATABASE_URL
 
 if (!datasourceUrl) {

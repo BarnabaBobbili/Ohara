@@ -6,6 +6,7 @@ import { connectMongoDB, checkMongoConnection, closeMongoDB } from './db/mongodb
 import { connectNeo4j, checkNeo4jConnection, closeNeo4j } from './db/neo4j.js';
 import { connectMySQL, checkMySQLConnection, closeMySQL } from './db/mysql.js';
 import { ensurePostgresIndexes } from './db/postgresIndexes.js';
+import { validateDataStoreConfig, DATA_STORES } from './config/dataStores.js';
 import { getCacheStats } from './utils/cache.js';
 import { getLogQueueStats } from './db/logQueue.js';
 import fs from 'fs';
@@ -19,8 +20,16 @@ import authRouter from './routes/auth.js';
 import reportsRouter from './routes/reports.js';
 import dashboardRouter from './routes/dashboard.js';
 import auditRouter from './routes/audit.js';
-import externalBooksRouter from './routes/external_books.js';
 import userLibraryRouter from './routes/user_library.js';
+import cmsRouter from './routes/cms.js';
+import siteSettingsRouter from './routes/site_settings.js';
+import collectionsRouter from './routes/collections.js';
+import recommendationsRouter from './routes/recommendations.js';
+import financialRouter from './routes/financial.js';
+import staffBoardRouter from './routes/staff_board.js';
+import ebooksRouter from './routes/ebooks.js';
+import announcementsRouter from './routes/announcements.js';
+import newsRouter from './routes/news.js';
 
 dotenv.config();
 
@@ -94,8 +103,16 @@ app.use('/api/auth', authRouter);
 app.use('/api/reports', reportsRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/audit', auditRouter);
-app.use('/api/external-books', externalBooksRouter);
 app.use('/api/user-library', userLibraryRouter);
+app.use('/api/cms', cmsRouter);
+app.use('/api/settings', siteSettingsRouter);
+app.use('/api/collections', collectionsRouter);
+app.use('/api/recommendations', recommendationsRouter);
+app.use('/api/financial', financialRouter);
+app.use('/api/staff-board', staffBoardRouter);
+app.use('/api/ebooks', ebooksRouter);
+app.use('/api/announcements', announcementsRouter);
+app.use('/api/news', newsRouter);
 
 app.use((err, req, res, next) => {
     console.error('Error:', err);
@@ -112,6 +129,14 @@ const startServer = async () => {
     console.log('='.repeat(60));
     console.log('Initializing databases...');
     console.log('='.repeat(60));
+
+    // Validate dynamic data store configuration
+    try {
+        validateDataStoreConfig();
+    } catch (error) {
+        console.error('❌ Data store configuration validation failed');
+        process.exit(1);
+    }
 
     try {
         await prisma.$queryRaw`SELECT 1`;

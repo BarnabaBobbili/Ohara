@@ -52,6 +52,7 @@ router.post('/signup', async (req, res) => {
                 email: member.email,
                 card_id: member.card_id,
                 member_type: member.member_type,
+                role: member.role || 'member',
             }
         });
     } catch (error) {
@@ -95,6 +96,7 @@ router.post('/login', async (req, res) => {
                 email: member.email,
                 card_id: member.card_id,
                 member_type: member.member_type,
+                role: member.role || 'member',
             }
         });
     } catch (error) {
@@ -105,20 +107,84 @@ router.post('/login', async (req, res) => {
 // GET /api/auth/me - Get current user info
 router.get('/me', authenticateToken, async (req, res) => {
     try {
-        const member = await prisma.members.findUnique({
-            where: { id: req.user.user_id },
-            select: {
-                id: true, card_id: true, name: true, email: true,
-                phone: true, address: true, member_type: true,
-                status: true, fines: true, joined_date: true,
-            }
-        });
+        const memberSelect = {
+            id: true, card_id: true, name: true, email: true,
+            phone: true, address: true, member_type: true,
+            status: true, fines: true, joined_date: true, role: true,
+        };
+        let member = null;
+
+        if (req.supabase_uid) {
+            member = await prisma.members.findFirst({
+                where: { supabase_uid: req.supabase_uid },
+                select: memberSelect,
+            });
+        }
+        if (!member && req.user_email) {
+            member = await prisma.members.findUnique({
+                where: { email: req.user_email },
+                select: memberSelect,
+            });
+        }
+        if (!member && req.user?.user_id) {
+            member = await prisma.members.findUnique({
+                where: { id: req.user.user_id },
+                select: memberSelect,
+            });
+        }
 
         if (!member) {
             return res.status(404).json({ detail: 'User not found' });
         }
 
         res.json(member);
+    } catch (error) {
+        res.status(500).json({ detail: error.message });
+    }
+});
+
+// GET /api/auth/staff/me - Check if current user is admin/staff
+// Used by AdminRoute.jsx to gate the admin panel
+router.get('/staff/me', authenticateToken, async (req, res) => {
+    try {
+        const memberSelect = {
+            id: true, name: true, email: true, role: true, member_type: true, status: true,
+        };
+        let member = null;
+
+        if (req.supabase_uid) {
+            member = await prisma.members.findFirst({
+                where: { supabase_uid: req.supabase_uid },
+                select: memberSelect,
+            });
+        }
+        if (!member && req.user_email) {
+            member = await prisma.members.findFirst({
+                where: { email: req.user_email },
+                select: memberSelect,
+            });
+        }
+        if (!member && req.user?.user_id) {
+            member = await prisma.members.findUnique({
+                where: { id: req.user.user_id },
+                select: memberSelect,
+            });
+        }
+
+        if (!member) {
+            return res.status(403).json({ detail: 'User not found' });
+        }
+        if (!['admin', 'staff'].includes(member.role)) {
+            return res.status(403).json({ detail: 'Staff access required', role: member.role });
+        }
+
+        res.json({
+            id: member.id,
+            role: member.role,
+            name: member.name,
+            email: member.email,
+            is_admin: member.role === 'admin',
+        });
     } catch (error) {
         res.status(500).json({ detail: error.message });
     }

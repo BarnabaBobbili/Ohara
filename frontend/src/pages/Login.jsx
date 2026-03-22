@@ -1,6 +1,6 @@
 // Login Page - Editorial Design
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { authAPI } from '../services/api';
 import { setAuthState } from '../services/authStore';
 
@@ -10,6 +10,8 @@ export default function Login() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const navigate = useNavigate();
+    const location = useLocation();
+    const from = location.state?.from || null;
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -20,15 +22,21 @@ export default function Login() {
             // Call login API
             const response = await authAPI.login({ email, password });
 
-            // Get user info with the token
-            localStorage.setItem('auth_token', response.access_token);
-            const userResponse = await authAPI.getCurrentUser();
-
             // Save auth state
-            setAuthState(response.access_token, userResponse);
+            setAuthState(response.access_token, response.user || null);
 
-            // Navigate to dashboard
-            navigate('/dashboard');
+            const role = response.user?.role || 'member';
+            const isAdmin = role === 'admin' || role === 'staff';
+
+            // If they came from a specific page (e.g. /admin), honour it
+            // Otherwise: admins go to /admin, members go to /dashboard
+            if (from) {
+                navigate(from, { replace: true });
+            } else if (isAdmin) {
+                navigate('/admin', { replace: true });
+            } else {
+                navigate('/dashboard', { replace: true });
+            }
         } catch (err) {
             console.error('Login error:', err);
             setError(err.message || 'Invalid email or password');
@@ -197,11 +205,19 @@ export default function Login() {
                         </Link>
                     </div>
 
-                    {/* Footer Link */}
-                    <div className="text-center mt-8">
+                    {/* Footer Links */}
+                    <div className="flex justify-between items-center mt-8 text-sm">
+                        <Link
+                            to="/admin-login"
+                            className="text-[#6B6560] dark:text-gray-400 hover:text-[#c16549] transition-colors inline-flex items-center gap-1"
+                            style={{ fontFamily: "'Noto Sans', sans-serif" }}
+                        >
+                            <span className="material-symbols-outlined text-sm">admin_panel_settings</span>
+                            Admin Login
+                        </Link>
                         <Link
                             to="/"
-                            className="text-sm text-[#6B6560] dark:text-gray-400 hover:text-[#c16549] transition-colors inline-flex items-center gap-1"
+                            className="text-[#6B6560] dark:text-gray-400 hover:text-[#c16549] transition-colors inline-flex items-center gap-1"
                             style={{ fontFamily: "'Noto Sans', sans-serif" }}
                         >
                             <span className="material-symbols-outlined text-sm">arrow_back</span>
