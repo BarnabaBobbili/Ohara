@@ -3,38 +3,43 @@
  * Handles all HTTP requests to the backend
  */
 import { API_BASE_URL, BACKEND_ORIGIN } from '../config/api';
+import { getAuthToken, getSupabaseSessionToken } from './authStore';
 
 /**
- * Generic fetch wrapper with error handling
+ * Generic fetch wrapper with error handling.
+ * Pass `adminToken` in options.headers or rely on the global supabase session.
  */
 async function fetchAPI(endpoint, options = {}) {
+    const isFormData = options.body instanceof FormData;
     const config = {
-        headers: {
-            'Content-Type': 'application/json',
-            ...options.headers,
-        },
         ...options,
+        headers: {
+            ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+            ...(options.headers || {}),
+        },
     };
 
     try {
         const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
 
         if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'API request failed');
+            const body = await response.json().catch(() => ({ detail: 'Request failed' }));
+            const err = new Error(body.detail || 'API request failed');
+            err.status = response.status;
+            throw err;
         }
 
-        // Handle 204 No Content
-        if (response.status === 204) {
-            return null;
-        }
-
+        if (response.status === 204) return null;
         return await response.json();
     } catch (error) {
         console.error('API Error:', error);
         throw error;
     }
 }
+
+const toBearerHeader = (token) => (token ? { Authorization: `Bearer ${token}` } : {});
+const getMemberAuthHeaders = () => toBearerHeader(getAuthToken() || getSupabaseSessionToken());
+const getAdminAuthHeaders = () => toBearerHeader(getSupabaseSessionToken() || getAuthToken());
 
 // ============= Books API =============
 
@@ -43,23 +48,19 @@ export const booksAPI = {
         const queryParams = new URLSearchParams(params).toString();
         return fetchAPI(`/books?${queryParams}`);
     },
-
-    getById: (id) => fetchAPI(`/books/${id}`),
-
-    getByISBN: (isbn) => fetchAPI(`/books/isbn/${isbn}`),
-
+    getById:    (id) => fetchAPI(`/books/${id}`),
+    getByISBN:  (isbn) => fetchAPI(`/books/isbn/${isbn}`),
     create: (bookData) => fetchAPI('/books', {
-        method: 'POST',
-        body: JSON.stringify(bookData),
+        method: 'POST', body: JSON.stringify(bookData),
+        headers: getAdminAuthHeaders(),
     }),
-
     update: (id, bookData) => fetchAPI(`/books/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify(bookData),
+        method: 'PUT', body: JSON.stringify(bookData),
+        headers: getAdminAuthHeaders(),
     }),
-
     delete: (id) => fetchAPI(`/books/${id}`, {
         method: 'DELETE',
+        headers: getAdminAuthHeaders(),
     }),
 };
 
@@ -68,25 +69,21 @@ export const booksAPI = {
 export const membersAPI = {
     getAll: (params = {}) => {
         const queryParams = new URLSearchParams(params).toString();
-        return fetchAPI(`/members?${queryParams}`);
+        return fetchAPI(`/members?${queryParams}`, { headers: getMemberAuthHeaders() });
     },
-
-    getById: (id) => fetchAPI(`/members/${id}`),
-
-    getByCardId: (cardId) => fetchAPI(`/members/card/${cardId}`),
-
+    getById:    (id) => fetchAPI(`/members/${id}`, { headers: getMemberAuthHeaders() }),
+    getByCardId:(cardId) => fetchAPI(`/members/card/${cardId}`, { headers: getMemberAuthHeaders() }),
     create: (memberData) => fetchAPI('/members', {
-        method: 'POST',
-        body: JSON.stringify(memberData),
+        method: 'POST', body: JSON.stringify(memberData),
+        headers: getMemberAuthHeaders(),
     }),
-
     update: (id, memberData) => fetchAPI(`/members/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify(memberData),
+        method: 'PUT', body: JSON.stringify(memberData),
+        headers: getMemberAuthHeaders(),
     }),
-
     delete: (id) => fetchAPI(`/members/${id}`, {
         method: 'DELETE',
+        headers: getMemberAuthHeaders(),
     }),
 };
 
@@ -94,60 +91,174 @@ export const membersAPI = {
 
 export const circulationAPI = {
     checkout: (transactionData) => fetchAPI('/circulation/checkout', {
-        method: 'POST',
-        body: JSON.stringify(transactionData),
+        method: 'POST', body: JSON.stringify(transactionData),
+        headers: getAdminAuthHeaders(),
     }),
-
     checkin: (transactionId, returnData) => fetchAPI(`/circulation/checkin/${transactionId}`, {
-        method: 'POST',
-        body: JSON.stringify(returnData),
+        method: 'POST', body: JSON.stringify(returnData),
+        headers: getAdminAuthHeaders(),
     }),
-
     getActive: (params = {}) => {
         const queryParams = new URLSearchParams(params).toString();
-        return fetchAPI(`/circulation/active?${queryParams}`);
+        return fetchAPI(`/circulation/active?${queryParams}`, { headers: getAdminAuthHeaders() });
     },
-
-    getOverdue: () => fetchAPI('/circulation/overdue'),
-
-    getMemberTransactions: (memberId) => fetchAPI(`/circulation/member/${memberId}`),
+    getMyLoans:    () => fetchAPI('/circulation/my',         { headers: getMemberAuthHeaders() }),
+    getMyHistory:  (params = {}) => {
+        const queryParams = new URLSearchParams(params).toString();
+        return fetchAPI(`/circulation/my-history?${queryParams}`, { headers: getMemberAuthHeaders() });
+    },
+    getOverdue:            () => fetchAPI('/circulation/overdue', { headers: getAdminAuthHeaders() }),
+    getMemberTransactions: (memberId) => fetchAPI(`/circulation/member/${memberId}`, { headers: getAdminAuthHeaders() }),
 };
 
 // ============= Dashboard API =============
 
 export const dashboardAPI = {
-    getStats: () => fetchAPI('/dashboard/stats'),
+    getStats: () => fetchAPI('/dashboard/stats', { headers: getMemberAuthHeaders() }),
 };
 
 // ============= Reports API =============
 
 export const reportsAPI = {
+    getStats: () => fetchAPI('/dashboard/stats', { headers: getAdminAuthHeaders() }), // Alias for reports
     getActivityLogs: (params = {}) => {
         const queryParams = new URLSearchParams(params).toString();
-        return fetchAPI(`/reports/activity-logs?${queryParams}`);
+        return fetchAPI(`/reports/activity-logs?${queryParams}`, { headers: getAdminAuthHeaders() });
     },
-
-    getCirculationStats: () => fetchAPI('/reports/circulation-stats'),
-
-    getPopularBooks: (limit = 10) => fetchAPI(`/reports/popular-books?limit=${limit}`),
-
-    getCategoryDistribution: () => fetchAPI('/reports/category-distribution'),
-
-    getMemberStats: () => fetchAPI('/reports/member-stats'),
-
-    getFineReport: () => fetchAPI('/reports/fines'),
-
-    getMonthlyTrend: () => fetchAPI('/reports/monthly-trend'),
+    getCirculationStats:   () => fetchAPI('/reports/circulation-stats',   { headers: getAdminAuthHeaders() }),
+    getPopularBooks: (limit = 10) => fetchAPI(`/reports/popular-books?limit=${limit}`, { headers: getAdminAuthHeaders() }),
+    getCategoryDistribution: () => fetchAPI('/reports/category-distribution', { headers: getAdminAuthHeaders() }),
+    getMemberStats:          () => fetchAPI('/reports/member-stats',           { headers: getAdminAuthHeaders() }),
+    getFineReport:           () => fetchAPI('/reports/fines',                  { headers: getAdminAuthHeaders() }),
+    getMonthlyTrend:         () => fetchAPI('/reports/monthly-trend',          { headers: getAdminAuthHeaders() }),
 };
 
 // ============= Audit Trail API =============
 
 export const auditAPI = {
-    getBookAudit: (bookId, limit = 100) => fetchAPI(`/audit/books/${bookId}?limit=${limit}`),
+    getBookAudit:    (bookId, limit = 100) => fetchAPI(`/audit/books/${bookId}?limit=${limit}`, { headers: getAdminAuthHeaders() }),
+    getAllAudits:    (limit = 100, offset = 0) => fetchAPI(`/audit/all?limit=${limit}&offset=${offset}`, { headers: getAdminAuthHeaders() }),
+    getAuditsByAction: (action, limit = 100) => fetchAPI(`/audit/action/${action}?limit=${limit}`, { headers: getAdminAuthHeaders() }),
+};
 
-    getAllAudits: (limit = 100, offset = 0) => fetchAPI(`/audit/all?limit=${limit}&offset=${offset}`),
+// ============= CMS API =============
 
-    getAuditsByAction: (action, limit = 100) => fetchAPI(`/audit/action/${action}?limit=${limit}`),
+export const cmsAPI = {
+    getPage:      (page) => fetchAPI(`/cms/pages/${page}`),
+    getSection:   (page, section) => fetchAPI(`/cms/pages/${page}/${section}`),
+    updatePage:   (page, content) => fetchAPI(`/cms/pages/${page}`, {
+        method: 'PUT', body: JSON.stringify({ content }),
+        headers: getAdminAuthHeaders(),
+    }),
+    updateSection: (page, section, content) => fetchAPI(`/cms/pages/${page}/${section}`, {
+        method: 'PUT', body: JSON.stringify(content),
+        headers: getAdminAuthHeaders(),
+    }),
+    resetSection: (page, section) => fetchAPI(`/cms/pages/${page}/${section}/reset`, {
+        method: 'POST',
+        headers: getAdminAuthHeaders(),
+    }),
+};
+
+// ============= Site Settings API =============
+
+export const settingsAPI = {
+    getAll:        ()           => fetchAPI('/settings'),
+    getByCategory: (category)  => fetchAPI(`/settings/by-category/${category}`),
+    update: (key, value, category) => fetchAPI(`/settings/${key}`, {
+        method: 'PUT', body: JSON.stringify({ value, category }),
+        headers: getAdminAuthHeaders(),
+    }),
+    bulkUpdate: (settings) => fetchAPI('/settings/bulk', {
+        method: 'POST', body: JSON.stringify({ settings }),
+        headers: getAdminAuthHeaders(),
+    }),
+};
+
+// ============= Collections API =============
+
+export const collectionsAPI = {
+    getAll:   ()   => fetchAPI('/collections'),
+    getAllAdmin: () => fetchAPI('/collections/admin/all', { headers: getAdminAuthHeaders() }),
+    getPinned: ()  => fetchAPI('/collections/pinned'),  // for landing page (max 3)
+    getById:  (id) => fetchAPI(`/collections/${id}`),
+    create: (data) => fetchAPI('/collections', {
+        method: 'POST', body: JSON.stringify(data),
+        headers: getAdminAuthHeaders(),
+    }),
+    update: (id, data) => fetchAPI(`/collections/${id}`, {
+        method: 'PUT', body: JSON.stringify(data),
+        headers: getAdminAuthHeaders(),
+    }),
+    pin: (id, is_pinned) => fetchAPI(`/collections/${id}/pin`, {
+        method: 'PATCH', body: JSON.stringify({ is_pinned }),
+        headers: getAdminAuthHeaders(),
+    }),
+    remove: (id) => fetchAPI(`/collections/${id}`, {
+        method: 'DELETE',
+        headers: getAdminAuthHeaders(),
+    }),
+    addBook: (collectionId, bookId, displayOrder = 0) =>
+        fetchAPI(`/collections/${collectionId}/books`, {
+            method: 'POST', body: JSON.stringify({ book_id: bookId, display_order: displayOrder }),
+            headers: getAdminAuthHeaders(),
+        }),
+    removeBook: (collectionId, bookId) =>
+        fetchAPI(`/collections/${collectionId}/books/${bookId}`, {
+            method: 'DELETE',
+            headers: getAdminAuthHeaders(),
+        }),
+};
+
+
+// ============= Recommendations API =============
+
+export const recommendationsAPI = {
+    getPopular:       (limit = 10)    => fetchAPI(`/recommendations/popular?limit=${limit}`),
+    getRelated:       (bookId, limit = 8) => fetchAPI(`/recommendations/related/${bookId}?limit=${limit}`),
+    getForMember:     (memberId, limit = 10) => fetchAPI(`/recommendations/for-member/${memberId}?limit=${limit}`),
+};
+
+// ============= Financial API (Admin) =============
+
+export const financialAPI = {
+    processPayment: (member_id, amount) => fetchAPI('/financial/process-payment', {
+        method: 'POST', body: JSON.stringify({ member_id, amount }),
+        headers: getAdminAuthHeaders(),
+    }),
+    getDashboardStats: () => fetchAPI('/financial/dashboard-stats', { headers: getAdminAuthHeaders() }),
+    getOverdueSummary: () => fetchAPI('/financial/overdue-summary',  { headers: getAdminAuthHeaders() }),
+    getMonthlySummary: (year, month) => fetchAPI(`/financial/monthly-summary?year=${year}&month=${month}`, { headers: getAdminAuthHeaders() }),
+};
+
+// ============= Staff Board API (Admin) =============
+
+export const staffBoardAPI = {
+    getAll:   ()       => fetchAPI('/staff-board', { headers: getAdminAuthHeaders() }),
+    getPosts: ()       => fetchAPI('/staff-board', { headers: getAdminAuthHeaders() }), // Alias for getAll
+    create:   (data)   => fetchAPI('/staff-board', { method: 'POST', body: JSON.stringify(data), headers: getAdminAuthHeaders() }),
+    update:   (id, data) => fetchAPI(`/staff-board/${id}`, { method: 'PUT', body: JSON.stringify(data), headers: getAdminAuthHeaders() }),
+    remove:   (id)     => fetchAPI(`/staff-board/${id}`, { method: 'DELETE', headers: getAdminAuthHeaders() }),
+};
+
+// ============= Ebooks API (Admin) =============
+
+export const ebooksAPI = {
+    getAll:  () => fetchAPI('/ebooks', { headers: getAdminAuthHeaders() }),
+    create:  (formData) => fetchAPI('/ebooks', {
+        method: 'POST',
+        body: formData,
+        headers: getAdminAuthHeaders(),
+    }),
+    update:  (id, data) => fetchAPI(`/ebooks/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+        headers: getAdminAuthHeaders(),
+    }),
+    remove:  (id) => fetchAPI(`/ebooks/${id}`, {
+        method: 'DELETE',
+        headers: getAdminAuthHeaders(),
+    }),
 };
 
 // ============= Health Check =============
@@ -160,35 +271,76 @@ export const healthAPI = {
 
 export const authAPI = {
     signup: (userData) => fetchAPI('/auth/signup', {
-        method: 'POST',
-        body: JSON.stringify(userData),
+        method: 'POST', body: JSON.stringify(userData),
     }),
-
     login: (credentials) => fetchAPI('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify(credentials),
+        method: 'POST', body: JSON.stringify(credentials),
     }),
-
     getCurrentUser: () => {
-        const token = localStorage.getItem('auth_token');
-        if (!token) {
-            throw new Error('Not authenticated');
-        }
-        return fetchAPI('/auth/me', {
-            headers: {
-                'Authorization': `Bearer ${token}`,
-            },
-        });
+        return fetchAPI('/auth/me', { headers: getMemberAuthHeaders() });
+    },
+    getCurrentStaff: () => {
+        return fetchAPI('/auth/staff/me', { headers: getAdminAuthHeaders() });
     },
 };
 
+// ============= Announcements API (MongoDB) =============
+
+export const announcementsAPI = {
+    getAll: () => fetchAPI('/announcements'),
+    getAllAdmin: () => fetchAPI('/announcements/admin/all', { headers: getAdminAuthHeaders() }),
+    getById: (id) => fetchAPI(`/announcements/${id}`),
+    create: (data) => fetchAPI('/announcements', {
+        method: 'POST', body: JSON.stringify(data),
+        headers: getAdminAuthHeaders(),
+    }),
+    update: (id, data) => fetchAPI(`/announcements/${id}`, {
+        method: 'PUT', body: JSON.stringify(data),
+        headers: getAdminAuthHeaders(),
+    }),
+    remove: (id) => fetchAPI(`/announcements/${id}`, {
+        method: 'DELETE',
+        headers: getAdminAuthHeaders(),
+    }),
+};
+
+// ============= News API (MySQL) =============
+
+export const newsAPI = {
+    getAll: () => fetchAPI('/news'),
+    getFeatured: () => fetchAPI('/news/featured'),
+    getAllAdmin: () => fetchAPI('/news/admin/all', { headers: getAdminAuthHeaders() }),
+    getById: (id) => fetchAPI(`/news/${id}`),
+    create: (data) => fetchAPI('/news', {
+        method: 'POST', body: JSON.stringify(data),
+        headers: getAdminAuthHeaders(),
+    }),
+    update: (id, data) => fetchAPI(`/news/${id}`, {
+        method: 'PUT', body: JSON.stringify(data),
+        headers: getAdminAuthHeaders(),
+    }),
+    remove: (id) => fetchAPI(`/news/${id}`, {
+        method: 'DELETE',
+        headers: getAdminAuthHeaders(),
+    }),
+};
+
 export default {
-    books: booksAPI,
-    members: membersAPI,
-    circulation: circulationAPI,
-    dashboard: dashboardAPI,
-    reports: reportsAPI,
-    audit: auditAPI,
-    health: healthAPI,
-    auth: authAPI,
+    books:           booksAPI,
+    members:         membersAPI,
+    circulation:     circulationAPI,
+    dashboard:       dashboardAPI,
+    reports:         reportsAPI,
+    audit:           auditAPI,
+    cms:             cmsAPI,
+    settings:        settingsAPI,
+    collections:     collectionsAPI,
+    recommendations: recommendationsAPI,
+    financial:       financialAPI,
+    staffBoard:      staffBoardAPI,
+    ebooks:          ebooksAPI,
+    health:          healthAPI,
+    auth:            authAPI,
+    announcements:   announcementsAPI,
+    news:            newsAPI,
 };

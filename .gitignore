@@ -52,3 +52,11 @@ header/
 stitch_admin_system_overview/
 review/
 anti-ai-design-prompt.md
+sql/
+'new queries'/
+
+# Markdown files (except README)
+*.md
+!README.md
+
+*.txt

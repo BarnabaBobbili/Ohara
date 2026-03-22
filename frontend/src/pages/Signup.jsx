@@ -63,12 +63,8 @@ export default function Signup() {
             // Call signup API
             const response = await authAPI.signup(userData);
 
-            // Get user info with the token
-            localStorage.setItem('auth_token', response.access_token);
-            const userResponse = await authAPI.getCurrentUser();
-
             // Save auth state
-            setAuthState(response.access_token, userResponse);
+            setAuthState(response.access_token, response.user || null);
 
             // Navigate to dashboard
             navigate('/dashboard');

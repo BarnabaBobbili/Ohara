@@ -1,418 +1,359 @@
 import { useState, useEffect } from 'react';
-import { ADMIN_COLORS } from '../../styles/adminTheme';
-import { booksAPI } from '../../services/api';
+import { booksAPI, collectionsAPI } from '../../services/api';
 
 export default function BookManagement() {
     const [books, setBooks] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [searchTerm, setSearchTerm] = useState('');
-    const [selectedCategory, setSelectedCategory] = useState('all');
-    const [showAddModal, setShowAddModal] = useState(false);
+    const [view, setView] = useState('grid');
+    const [search, setSearch] = useState('');
+    const [showModal, setShowModal] = useState(false);
     const [editingBook, setEditingBook] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [formData, setFormData] = useState({
+        title: '', author: '', isbn: '', genre: '', description: '',
+        cover_image_url: '', publication_year: '', publisher: '', total_copies: 1,
+        category: '', language: 'English', pages: '', location: '', edition: '',
+        format: 'Hardcover', is_reference_only: false
+    });
 
-    useEffect(() => {
-        loadBooks();
-    }, []);
+    useEffect(() => { loadBooks(); }, []);
 
     const loadBooks = async () => {
         try {
-            setLoading(true);
-            const data = await booksAPI.getAll({ search: searchTerm });
-            setBooks(data);
+            const data = await booksAPI.getAll();
+            setBooks(Array.isArray(data) ? data : []);
         } catch (error) {
             console.error('Failed to load books:', error);
-            alert('Failed to load books');
         } finally {
             setLoading(false);
         }
     };
 
-    const handleSearch = () => {
-        loadBooks();
-    };
-
-    const handleDelete = async (id) => {
-        if (!confirm('Are you sure you want to delete this book?')) return;
-
+    const handleSubmit = async (e) => {
+        e.preventDefault();
         try {
-            await booksAPI.delete(id);
-            alert('Book deleted successfully');
+            if (editingBook) {
+                await booksAPI.update(editingBook.id, formData);
+            } else {
+                await booksAPI.create(formData);
+            }
             loadBooks();
+            closeModal();
         } catch (error) {
-            alert('Failed to delete book: ' + error.message);
+            alert('Failed to save book: ' + error.message);
         }
     };
 
-    const filteredBooks = selectedCategory === 'all'
-        ? books
-        : books.filter(book => book.category === selectedCategory);
+    const handleDelete = async (id) => {
+        if (!confirm('Delete this book?')) return;
+        try {
+            await booksAPI.delete(id);
+            loadBooks();
+        } catch (error) {
+            alert('Failed to delete: ' + error.message);
+        }
+    };
 
-    const categories = ['all', ...new Set(books.map(b => b.category).filter(Boolean))];
+    const openAddModal = () => {
+        setEditingBook(null);
+        setFormData({ 
+            title: '', author: '', isbn: '', genre: '', description: '', 
+            cover_image_url: '', publication_year: '', publisher: '', total_copies: 1,
+            category: '', language: 'English', pages: '', location: '', edition: '',
+            format: 'Hardcover', is_reference_only: false
+        });
+        setShowModal(true);
+    };
+
+    const openEditModal = (book) => {
+        setEditingBook(book);
+        setFormData({
+            title: book.title || '',
+            author: book.author || '',
+            isbn: book.isbn || '',
+            genre: book.genre || '',
+            description: book.description || '',
+            cover_image_url: book.cover_image_url || '',
+            publication_year: book.publication_year || '',
+            publisher: book.publisher || '',
+            total_copies: book.total_copies || 1,
+            category: book.category || '',
+            language: book.language || 'English',
+            pages: book.pages || '',
+            location: book.location || '',
+            edition: book.edition || '',
+            format: book.format || 'Hardcover',
+            is_reference_only: book.is_reference_only || false
+        });
+        setShowModal(true);
+    };
+
+    const closeModal = () => {
+        setShowModal(false);
+        setEditingBook(null);
+    };
+
+    const filtered = books.filter(b => 
+        b.title?.toLowerCase().includes(search.toLowerCase()) ||
+        b.author?.toLowerCase().includes(search.toLowerCase())
+    );
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center h-screen" style={{ backgroundColor: ADMIN_COLORS.primaryBg }}>
-                <div className="text-center">
-                    <div className="animate-spin rounded-full h-16 w-16 border-b-2 mx-auto mb-4" style={{ borderColor: ADMIN_COLORS.burgundy }}></div>
-                    <p style={{ color: ADMIN_COLORS.textMuted }}>Loading books...</p>
-                </div>
+            <div className="p-6 flex items-center justify-center min-h-[400px]">
+                <span className="material-symbols-outlined text-4xl text-[#c16549] animate-spin">refresh</span>
             </div>
         );
     }
 
     return (
-        <div className="flex flex-col min-h-screen" style={{ backgroundColor: ADMIN_COLORS.primaryBg }}>
+        <div className="p-6">
             {/* Header */}
-            <header className="px-8 py-6 flex justify-between items-end gap-4" style={{ borderBottom: `1px solid ${ADMIN_COLORS.border}`, backgroundColor: ADMIN_COLORS.cardBg }}>
+            <div className="flex items-center justify-between mb-6">
                 <div>
-                    <p className="text-xs font-medium uppercase tracking-wider" style={{ color: ADMIN_COLORS.textMuted }}>Collection Management</p>
-                    <h2 className="text-3xl font-semibold italic" style={{ fontFamily: "'Newsreader', serif", color: ADMIN_COLORS.textPrimary }}>Book Catalog</h2>
+                    <div className="flex items-center gap-2 mb-1">
+                        <div className="h-[2px] w-8 bg-[#c16549]"></div>
+                        <span className="text-[10px] font-bold tracking-[0.15em] uppercase text-[#c16549]">Catalog</span>
+                    </div>
+                    <h1 className="text-3xl font-bold text-[#1E1815]">Book Management</h1>
                 </div>
-                <button
-                    onClick={() => setShowAddModal(true)}
-                    className="px-4 py-2 rounded flex items-center gap-2 hover:opacity-90 transition"
-                    style={{ backgroundColor: ADMIN_COLORS.burgundy, color: 'white' }}
-                >
-                    <span className="material-symbols-outlined">add</span>
-                    Add New Book
+                <button onClick={openAddModal} className="flex items-center gap-2 bg-[#c16549] text-white px-4 py-2 text-sm font-medium hover:bg-[#a85443] transition-colors">
+                    <span className="material-symbols-outlined text-lg">add</span>
+                    Add Book
                 </button>
-            </header>
+            </div>
 
-            {/* Filters */}
-            <div className="p-8">
-                <div className="max-w-7xl mx-auto">
-                    {/* Search and Category Filter */}
-                    <div className="flex gap-4 mb-6">
-                        <div className="flex-1">
-                            <div className="relative flex items-center h-12 rounded border shadow-sm"
-                                style={{ borderColor: ADMIN_COLORS.border, backgroundColor: ADMIN_COLORS.cardBg }}>
-                                <div className="absolute left-4" style={{ color: ADMIN_COLORS.burgundy }}>
-                                    <span className="material-symbols-outlined">search</span>
+            {/* Search & View Toggle */}
+            <div className="flex items-center gap-4 mb-6">
+                <div className="flex-1 relative">
+                    <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#6B6560] text-lg">search</span>
+                    <input
+                        type="text"
+                        placeholder="Search books..."
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 border border-[#E8E4DF] bg-white text-sm focus:border-[#c16549] focus:outline-none"
+                    />
+                </div>
+                <div className="flex border border-[#E8E4DF] bg-white">
+                    <button onClick={() => setView('grid')} className={`p-2 ${view === 'grid' ? 'bg-[#c16549] text-white' : 'text-[#6B6560] hover:bg-[#FAF7F2]'}`}>
+                        <span className="material-symbols-outlined text-lg">grid_view</span>
+                    </button>
+                    <button onClick={() => setView('table')} className={`p-2 ${view === 'table' ? 'bg-[#c16549] text-white' : 'text-[#6B6560] hover:bg-[#FAF7F2]'}`}>
+                        <span className="material-symbols-outlined text-lg">view_list</span>
+                    </button>
+                </div>
+            </div>
+
+            {/* Book Count */}
+            <p className="text-sm text-[#6B6560] mb-4">{filtered.length} books</p>
+
+            {/* Grid View */}
+            {view === 'grid' && (
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                    {filtered.map((book) => (
+                        <div key={book.id} className="group bg-white border border-[#E8E4DF] overflow-hidden hover:border-[#c16549] transition-colors">
+                            <div className="aspect-[2/3] bg-gradient-to-br from-[#c16549] to-[#8d4d3f] relative">
+                                {book.cover_image_url ? (
+                                    <img src={book.cover_image_url} alt={book.title} className="w-full h-full object-cover" />
+                                ) : (
+                                    <div className="absolute inset-0 flex items-center justify-center p-2">
+                                        <span className="text-white text-xs text-center font-medium">{book.title}</span>
+                                    </div>
+                                )}
+                                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                    <button onClick={() => openEditModal(book)} className="p-2 bg-white rounded-full hover:bg-[#FAF7F2]">
+                                        <span className="material-symbols-outlined text-[#1E1815] text-sm">edit</span>
+                                    </button>
+                                    <button onClick={() => handleDelete(book.id)} className="p-2 bg-white rounded-full hover:bg-red-50">
+                                        <span className="material-symbols-outlined text-red-500 text-sm">delete</span>
+                                    </button>
                                 </div>
-                                <input
-                                    className="w-full h-full bg-transparent border-none pl-12 pr-4 focus:ring-0"
-                                    placeholder="Search by title, author, or ISBN..."
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                                    style={{ fontFamily: "'Newsreader', serif", color: ADMIN_COLORS.textPrimary }}
-                                />
-                                <button
-                                    onClick={handleSearch}
-                                    className="mr-2 px-4 py-1 rounded text-sm"
-                                    style={{ backgroundColor: ADMIN_COLORS.burgundy, color: 'white' }}
-                                >
-                                    Search
-                                </button>
+                                {book.is_reference_only && (
+                                    <span className="absolute top-2 left-2 px-1.5 py-0.5 bg-yellow-500 text-white text-[9px] font-bold uppercase">Ref Only</span>
+                                )}
+                            </div>
+                            <div className="p-3">
+                                <h3 className="font-medium text-sm text-[#1E1815] truncate">{book.title}</h3>
+                                <p className="text-xs text-[#6B6560] truncate">{book.author}</p>
+                                <div className="flex items-center gap-2 mt-1">
+                                    {book.publication_year && <span className="text-[10px] text-[#6B6560]">{book.publication_year}</span>}
+                                    <span className="text-[10px] text-[#6B6560]">{book.available_copies}/{book.total_copies} avail</span>
+                                </div>
                             </div>
                         </div>
-                        <select
-                            value={selectedCategory}
-                            onChange={(e) => setSelectedCategory(e.target.value)}
-                            className="px-4 py-2 rounded border"
-                            style={{ borderColor: ADMIN_COLORS.border, backgroundColor: ADMIN_COLORS.cardBg, color: ADMIN_COLORS.textPrimary }}
-                        >
-                            {categories.map(cat => (
-                                <option key={cat} value={cat}>
-                                    {cat === 'all' ? 'All Categories' : cat}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-
-                    {/* Books Table */}
-                    <div className="border rounded shadow-sm overflow-hidden"
-                        style={{ backgroundColor: ADMIN_COLORS.cardBg, borderColor: ADMIN_COLORS.border }}>
-                        <table className="w-full">
-                            <thead>
-                                <tr style={{ borderBottom: `2px solid ${ADMIN_COLORS.border}`, backgroundColor: `${ADMIN_COLORS.secondaryBg}50` }}>
-                                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider" style={{ color: ADMIN_COLORS.textMuted }}>Cover</th>
-                                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider" style={{ color: ADMIN_COLORS.textMuted }}>ISBN</th>
-                                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider" style={{ color: ADMIN_COLORS.textMuted }}>Title</th>
-                                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider" style={{ color: ADMIN_COLORS.textMuted }}>Author</th>
-                                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider" style={{ color: ADMIN_COLORS.textMuted }}>Category</th>
-                                    <th className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider" style={{ color: ADMIN_COLORS.textMuted }}>Copies</th>
-                                    <th className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider" style={{ color: ADMIN_COLORS.textMuted }}>Available</th>
-                                    <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider" style={{ color: ADMIN_COLORS.textMuted }}>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {filteredBooks.length > 0 ? filteredBooks.map((book) => (
-                                    <tr key={book.id} className="hover:bg-opacity-10 transition" style={{ borderBottom: `1px solid ${ADMIN_COLORS.border}` }}>
-                                        <td className="px-6 py-4">
-                                            {book.cover_image_url ? (
-                                                <img src={book.cover_image_url} alt={book.title} className="w-12 h-16 object-cover rounded shadow-sm" />
-                                            ) : (
-                                                <div className="w-12 h-16 rounded flex items-center justify-center" style={{ backgroundColor: ADMIN_COLORS.secondaryBg }}>
-                                                    <span className="material-symbols-outlined text-sm" style={{ color: ADMIN_COLORS.textMuted }}>book</span>
-                                                </div>
-                                            )}
-                                        </td>
-                                        <td className="px-6 py-4 text-sm" style={{ color: ADMIN_COLORS.textMuted }}>{book.isbn}</td>
-                                        <td className="px-6 py-4 font-medium" style={{ color: ADMIN_COLORS.textPrimary }}>{book.title}</td>
-                                        <td className="px-6 py-4" style={{ color: ADMIN_COLORS.textPrimary }}>{book.author}</td>
-                                        <td className="px-6 py-4 text-sm">
-                                            <span className="px-2 py-1 rounded text-xs" style={{ backgroundColor: `${ADMIN_COLORS.burgundy}20`, color: ADMIN_COLORS.burgundy }}>
-                                                {book.category || 'Uncategorized'}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 text-center" style={{ color: ADMIN_COLORS.textPrimary }}>{book.total_copies}</td>
-                                        <td className="px-6 py-4 text-center">
-                                            <span className="font-bold" style={{ color: book.available_copies > 0 ? ADMIN_COLORS.green : ADMIN_COLORS.red }}>
-                                                {book.available_copies}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            <button
-                                                onClick={() => setEditingBook(book)}
-                                                className="mr-2 px-3 py-1 rounded text-sm hover:opacity-80"
-                                                style={{ backgroundColor: ADMIN_COLORS.tan, color: 'white' }}
-                                            >
-                                                Edit
-                                            </button>
-                                            <button
-                                                onClick={() => handleDelete(book.id)}
-                                                className="px-3 py-1 rounded text-sm hover:opacity-80"
-                                                style={{ backgroundColor: ADMIN_COLORS.red, color: 'white' }}
-                                            >
-                                                Delete
-                                            </button>
-                                        </td>
-                                    </tr>
-                                )) : (
-                                    <tr>
-                                        <td colSpan="8" className="px-6 py-12 text-center" style={{ color: ADMIN_COLORS.textMuted }}>
-                                            No books found
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
+                    ))}
                 </div>
-            </div>
-
-            {/* Add/Edit Modal */}
-            {(showAddModal || editingBook) && (
-                <BookFormModal
-                    book={editingBook}
-                    onClose={() => {
-                        setShowAddModal(false);
-                        setEditingBook(null);
-                    }}
-                    onSave={() => {
-                        setShowAddModal(false);
-                        setEditingBook(null);
-                        loadBooks();
-                    }}
-                />
             )}
-        </div>
-    );
-}
 
-function BookFormModal({ book, onClose, onSave }) {
-    const [formData, setFormData] = useState(book || {
-        isbn: '',
-        title: '',
-        author: '',
-        publisher: '',
-        publication_year: '',
-        category: '',
-        language: 'English',
-        pages: '',
-        description: '',
-        total_copies: 1,
-        location: '',
-        cover_image_url: ''
-    });
-
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        try {
-            // Clean up data - remove empty strings and convert types
-            const cleanData = {
-                isbn: formData.isbn,
-                title: formData.title,
-                author: formData.author,
-                publisher: formData.publisher || undefined,
-                publication_year: formData.publication_year ? parseInt(formData.publication_year) : undefined,
-                category: formData.category || undefined,
-                language: formData.language || 'English',
-                pages: formData.pages ? parseInt(formData.pages) : undefined,
-                description: formData.description || undefined,
-                cover_image_url: formData.cover_image_url || undefined,
-                total_copies: parseInt(formData.total_copies) || 1,
-                location: formData.location || undefined
-            };
-
-            // Remove undefined values
-            Object.keys(cleanData).forEach(key =>
-                cleanData[key] === undefined && delete cleanData[key]
-            );
-
-            if (book) {
-                await booksAPI.update(book.id, cleanData);
-                alert('Book updated successfully');
-            } else {
-                await booksAPI.create(cleanData);
-                alert('Book added successfully');
-            }
-            onSave();
-        } catch (error) {
-            console.error('Error saving book:', error);
-            alert('Failed to save book: ' + error.message);
-        }
-    };
-
-    return (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="max-w-2xl w-full max-h-[90vh] overflow-y-auto rounded-lg shadow-xl"
-                style={{ backgroundColor: ADMIN_COLORS.cardBg }}>
-                <div className="p-6 border-b" style={{ borderColor: ADMIN_COLORS.border }}>
-                    <h3 className="text-2xl font-semibold" style={{ fontFamily: "'Newsreader', serif", color: ADMIN_COLORS.textPrimary }}>
-                        {book ? 'Edit Book' : 'Add New Book'}
-                    </h3>
+            {/* Table View */}
+            {view === 'table' && (
+                <div className="bg-white border border-[#E8E4DF] overflow-hidden">
+                    <table className="w-full">
+                        <thead className="bg-[#FAF7F2]">
+                            <tr>
+                                <th className="text-left p-3 text-xs font-semibold text-[#6B6560] uppercase tracking-wide">Title</th>
+                                <th className="text-left p-3 text-xs font-semibold text-[#6B6560] uppercase tracking-wide">Author</th>
+                                <th className="text-left p-3 text-xs font-semibold text-[#6B6560] uppercase tracking-wide">ISBN</th>
+                                <th className="text-left p-3 text-xs font-semibold text-[#6B6560] uppercase tracking-wide">Category</th>
+                                <th className="text-left p-3 text-xs font-semibold text-[#6B6560] uppercase tracking-wide">Year</th>
+                                <th className="text-left p-3 text-xs font-semibold text-[#6B6560] uppercase tracking-wide">Copies</th>
+                                <th className="text-left p-3 text-xs font-semibold text-[#6B6560] uppercase tracking-wide">Status</th>
+                                <th className="text-right p-3 text-xs font-semibold text-[#6B6560] uppercase tracking-wide">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#E8E4DF]">
+                            {filtered.map((book) => (
+                                <tr key={book.id} className="hover:bg-[#FAF7F2]">
+                                    <td className="p-3 text-sm text-[#1E1815]">{book.title}</td>
+                                    <td className="p-3 text-sm text-[#6B6560]">{book.author}</td>
+                                    <td className="p-3 text-sm text-[#6B6560] font-mono">{book.isbn}</td>
+                                    <td className="p-3 text-sm text-[#6B6560]">{book.category || book.genre || '-'}</td>
+                                    <td className="p-3 text-sm text-[#6B6560]">{book.publication_year || '-'}</td>
+                                    <td className="p-3 text-sm text-[#6B6560]">{book.available_copies}/{book.total_copies}</td>
+                                    <td className="p-3">
+                                        <span className={`px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
+                                            book.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+                                        }`}>{book.is_active ? 'Active' : 'Inactive'}</span>
+                                    </td>
+                                    <td className="p-3 text-right">
+                                        <button onClick={() => openEditModal(book)} className="text-[#c16549] hover:text-[#a85443] p-1">
+                                            <span className="material-symbols-outlined text-lg">edit</span>
+                                        </button>
+                                        <button onClick={() => handleDelete(book.id)} className="text-red-500 hover:text-red-600 p-1 ml-1">
+                                            <span className="material-symbols-outlined text-lg">delete</span>
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
                 </div>
-                <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                    {/* Cover Image Preview */}
-                    {formData.cover_image_url && (
-                        <div className="flex justify-center">
-                            <img
-                                src={formData.cover_image_url}
-                                alt="Book cover preview"
-                                className="w-32 h-48 object-cover rounded shadow-lg"
-                                onError={(e) => e.target.style.display = 'none'}
-                            />
-                        </div>
-                    )}
+            )}
 
-                    <div>
-                        <label className="block text-sm font-medium mb-1" style={{ color: ADMIN_COLORS.textMuted }}>Cover Image URL</label>
-                        <input
-                            type="url"
-                            value={formData.cover_image_url}
-                            onChange={(e) => setFormData({ ...formData, cover_image_url: e.target.value })}
-                            placeholder="https://example.com/cover.jpg"
-                            className="w-full px-3 py-2 rounded border"
-                            style={{ borderColor: ADMIN_COLORS.border, backgroundColor: ADMIN_COLORS.primaryBg, color: ADMIN_COLORS.textPrimary }}
-                        />
-                        <p className="text-xs mt-1" style={{ color: ADMIN_COLORS.textMuted }}>Enter a URL to an image (e.g., from Google Books API)</p>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium mb-1" style={{ color: ADMIN_COLORS.textMuted }}>ISBN *</label>
-                            <input
-                                required
-                                value={formData.isbn}
-                                onChange={(e) => setFormData({ ...formData, isbn: e.target.value })}
-                                className="w-full px-3 py-2 rounded border"
-                                style={{ borderColor: ADMIN_COLORS.border, backgroundColor: ADMIN_COLORS.primaryBg, color: ADMIN_COLORS.textPrimary }}
-                            />
+            {/* Modal */}
+            {showModal && (
+                <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4">
+                    <div className="bg-white w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-lg shadow-2xl">
+                        <div className="p-4 border-b border-[#E8E4DF] flex items-center justify-between">
+                            <h2 className="text-lg font-bold text-[#1E1815]">{editingBook ? 'Edit Book' : 'Add Book'}</h2>
+                            <button onClick={closeModal} className="p-1 hover:bg-[#FAF7F2] rounded">
+                                <span className="material-symbols-outlined text-[#6B6560]">close</span>
+                            </button>
                         </div>
-                        <div>
-                            <label className="block text-sm font-medium mb-1" style={{ color: ADMIN_COLORS.textMuted }}>Category</label>
-                            <input
-                                value={formData.category}
-                                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                                className="w-full px-3 py-2 rounded border"
-                                style={{ borderColor: ADMIN_COLORS.border, backgroundColor: ADMIN_COLORS.primaryBg, color: ADMIN_COLORS.textPrimary }}
-                            />
-                        </div>
+                        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+                            {/* Basic Info */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="col-span-2">
+                                    <label className="block text-xs font-semibold text-[#6B6560] uppercase tracking-wide mb-1">Title *</label>
+                                    <input required value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} className="w-full px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-[#6B6560] uppercase tracking-wide mb-1">Author *</label>
+                                    <input required value={formData.author} onChange={e => setFormData({...formData, author: e.target.value})} className="w-full px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-[#6B6560] uppercase tracking-wide mb-1">ISBN *</label>
+                                    <input required value={formData.isbn} onChange={e => setFormData({...formData, isbn: e.target.value})} className="w-full px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none" />
+                                </div>
+                            </div>
+
+                            {/* Category & Genre */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-semibold text-[#6B6560] uppercase tracking-wide mb-1">Category</label>
+                                    <input value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} placeholder="e.g., Fiction, Science" className="w-full px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-[#6B6560] uppercase tracking-wide mb-1">Genre</label>
+                                    <input value={formData.genre} onChange={e => setFormData({...formData, genre: e.target.value})} placeholder="e.g., Mystery, Romance" className="w-full px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none" />
+                                </div>
+                            </div>
+
+                            {/* Publication Info */}
+                            <div className="grid grid-cols-3 gap-4">
+                                <div>
+                                    <label className="block text-xs font-semibold text-[#6B6560] uppercase tracking-wide mb-1">Publisher</label>
+                                    <input value={formData.publisher} onChange={e => setFormData({...formData, publisher: e.target.value})} className="w-full px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-[#6B6560] uppercase tracking-wide mb-1">Publication Year</label>
+                                    <input type="number" min="1000" max="2100" value={formData.publication_year} onChange={e => setFormData({...formData, publication_year: e.target.value ? parseInt(e.target.value) : ''})} placeholder="e.g., 2024" className="w-full px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-[#6B6560] uppercase tracking-wide mb-1">Edition</label>
+                                    <input value={formData.edition} onChange={e => setFormData({...formData, edition: e.target.value})} placeholder="e.g., 1st, 2nd" className="w-full px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none" />
+                                </div>
+                            </div>
+
+                            {/* Physical Info */}
+                            <div className="grid grid-cols-4 gap-4">
+                                <div>
+                                    <label className="block text-xs font-semibold text-[#6B6560] uppercase tracking-wide mb-1">Pages</label>
+                                    <input type="number" min="1" value={formData.pages} onChange={e => setFormData({...formData, pages: e.target.value ? parseInt(e.target.value) : ''})} className="w-full px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-[#6B6560] uppercase tracking-wide mb-1">Language</label>
+                                    <select value={formData.language} onChange={e => setFormData({...formData, language: e.target.value})} className="w-full px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none">
+                                        <option value="English">English</option>
+                                        <option value="Hindi">Hindi</option>
+                                        <option value="Telugu">Telugu</option>
+                                        <option value="Tamil">Tamil</option>
+                                        <option value="Spanish">Spanish</option>
+                                        <option value="French">French</option>
+                                        <option value="German">German</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-[#6B6560] uppercase tracking-wide mb-1">Format</label>
+                                    <select value={formData.format} onChange={e => setFormData({...formData, format: e.target.value})} className="w-full px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none">
+                                        <option value="Hardcover">Hardcover</option>
+                                        <option value="Paperback">Paperback</option>
+                                        <option value="eBook">eBook</option>
+                                        <option value="Audiobook">Audiobook</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-[#6B6560] uppercase tracking-wide mb-1">Location</label>
+                                    <input value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} placeholder="e.g., Shelf A-12" className="w-full px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none" />
+                                </div>
+                            </div>
+
+                            {/* Copies & Reference */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-semibold text-[#6B6560] uppercase tracking-wide mb-1">Total Copies</label>
+                                    <input type="number" min="1" value={formData.total_copies} onChange={e => setFormData({...formData, total_copies: parseInt(e.target.value) || 1})} className="w-full px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none" />
+                                </div>
+                                <div className="flex items-end pb-2">
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input type="checkbox" checked={formData.is_reference_only} onChange={e => setFormData({...formData, is_reference_only: e.target.checked})} className="w-4 h-4 accent-[#c16549]" />
+                                        <span className="text-sm text-[#6B6560]">Reference Only (cannot be borrowed)</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            {/* Cover Image */}
+                            <div>
+                                <label className="block text-xs font-semibold text-[#6B6560] uppercase tracking-wide mb-1">Cover Image URL</label>
+                                <input value={formData.cover_image_url} onChange={e => setFormData({...formData, cover_image_url: e.target.value})} placeholder="https://..." className="w-full px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none" />
+                            </div>
+
+                            {/* Description */}
+                            <div>
+                                <label className="block text-xs font-semibold text-[#6B6560] uppercase tracking-wide mb-1">Description</label>
+                                <textarea rows="3" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} className="w-full px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none resize-none" />
+                            </div>
+
+                            {/* Actions */}
+                            <div className="flex gap-3 pt-2">
+                                <button type="button" onClick={closeModal} className="flex-1 px-4 py-2 border border-[#E8E4DF] text-sm font-medium hover:bg-[#FAF7F2] transition-colors">Cancel</button>
+                                <button type="submit" className="flex-1 px-4 py-2 bg-[#c16549] text-white text-sm font-medium hover:bg-[#a85443] transition-colors">{editingBook ? 'Update' : 'Add'}</button>
+                            </div>
+                        </form>
                     </div>
-                    <div>
-                        <label className="block text-sm font-medium mb-1" style={{ color: ADMIN_COLORS.textMuted }}>Title *</label>
-                        <input
-                            required
-                            value={formData.title}
-                            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                            className="w-full px-3 py-2 rounded border"
-                            style={{ borderColor: ADMIN_COLORS.border, backgroundColor: ADMIN_COLORS.primaryBg, color: ADMIN_COLORS.textPrimary }}
-                        />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium mb-1" style={{ color: ADMIN_COLORS.textMuted }}>Author *</label>
-                            <input
-                                required
-                                value={formData.author}
-                                onChange={(e) => setFormData({ ...formData, author: e.target.value })}
-                                className="w-full px-3 py-2 rounded border"
-                                style={{ borderColor: ADMIN_COLORS.border, backgroundColor: ADMIN_COLORS.primaryBg, color: ADMIN_COLORS.textPrimary }}
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium mb-1" style={{ color: ADMIN_COLORS.textMuted }}>Publisher</label>
-                            <input
-                                value={formData.publisher}
-                                onChange={(e) => setFormData({ ...formData, publisher: e.target.value })}
-                                className="w-full px-3 py-2 rounded border"
-                                style={{ borderColor: ADMIN_COLORS.border, backgroundColor: ADMIN_COLORS.primaryBg, color: ADMIN_COLORS.textPrimary }}
-                            />
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-3 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium mb-1" style={{ color: ADMIN_COLORS.textMuted }}>Year</label>
-                            <input
-                                type="number"
-                                value={formData.publication_year}
-                                onChange={(e) => setFormData({ ...formData, publication_year: e.target.value })}
-                                className="w-full px-3 py-2 rounded border"
-                                style={{ borderColor: ADMIN_COLORS.border, backgroundColor: ADMIN_COLORS.primaryBg, color: ADMIN_COLORS.textPrimary }}
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium mb-1" style={{ color: ADMIN_COLORS.textMuted }}>Total Copies</label>
-                            <input
-                                type="number"
-                                min="1"
-                                value={formData.total_copies}
-                                onChange={(e) => setFormData({ ...formData, total_copies: parseInt(e.target.value) })}
-                                className="w-full px-3 py-2 rounded border"
-                                style={{ borderColor: ADMIN_COLORS.border, backgroundColor: ADMIN_COLORS.primaryBg, color: ADMIN_COLORS.textPrimary }}
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium mb-1" style={{ color: ADMIN_COLORS.textMuted }}>Location</label>
-                            <input
-                                value={formData.location}
-                                onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                                className="w-full px-3 py-2 rounded border"
-                                placeholder="Shelf A1"
-                                style={{ borderColor: ADMIN_COLORS.border, backgroundColor: ADMIN_COLORS.primaryBg, color: ADMIN_COLORS.textPrimary }}
-                            />
-                        </div>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium mb-1" style={{ color: ADMIN_COLORS.textMuted }}>Description</label>
-                        <textarea
-                            rows="3"
-                            value={formData.description}
-                            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                            className="w-full px-3 py-2 rounded border"
-                            style={{ borderColor: ADMIN_COLORS.border, backgroundColor: ADMIN_COLORS.primaryBg, color: ADMIN_COLORS.textPrimary }}
-                        />
-                    </div>
-                    <div className="flex gap-3 pt-4">
-                        <button
-                            type="submit"
-                            className="flex-1 px-4 py-2 rounded hover:opacity-90 transition"
-                            style={{ backgroundColor: ADMIN_COLORS.burgundy, color: 'white' }}
-                        >
-                            {book ? 'Update Book' : 'Add Book'}
-                        </button>
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="flex-1 px-4 py-2 rounded border hover:bg-opacity-10 transition"
-                            style={{ borderColor: ADMIN_COLORS.border, color: ADMIN_COLORS.textPrimary }}
-                        >
-                            Cancel
-                        </button>
-                    </div>
-                </form>
-            </div>
+                </div>
+            )}
         </div>
     );
 }

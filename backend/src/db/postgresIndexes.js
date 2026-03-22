@@ -23,8 +23,8 @@ const POSTGRES_INDEX_STATEMENTS = [
     'CREATE INDEX IF NOT EXISTS idx_members_joined_date ON members (joined_date DESC)',
 
     'CREATE INDEX IF NOT EXISTS idx_reservations_status ON reservations (status)',
-    'CREATE UNIQUE INDEX IF NOT EXISTS idx_external_cache_source_source_id ON external_book_cache (source, source_id)',
-    'CREATE INDEX IF NOT EXISTS idx_external_cache_cached_at ON external_book_cache (cached_at DESC)',
+    
+    // Removed external_book_cache - table doesn't exist in new schema
 ];
 
 export const ensurePostgresIndexes = async () => {

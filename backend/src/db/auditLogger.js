@@ -1,26 +1,27 @@
-import { getMySQLPool } from './mysql.js';
+import { AuditTrailStore } from './dataStoreAdapter.js';
 import { enqueueLogJob } from './logQueue.js';
 import { parseOffsetLimitPagination } from '../utils/pagination.js';
 
 const MAX_LIMIT = Number.parseInt(process.env.AUDIT_MAX_LIMIT || '200', 10);
 
-const AUDIT_SELECT_COLUMNS = `
-    id,
-    book_id,
-    action,
-    field_name,
-    old_value,
-    new_value,
-    changed_by,
-    changed_at
-`;
+/**
+ * Log book update to audit trail (MySQL by default)
+ * Records field-level changes: old_value → new_value
+ * @param {number} bookId - Book ID
+ * @param {Object} oldData - Old book data
+ * @param {Object} newData - New book data
+ * @param {string} changedBy - Who made the change (email or 'system')
+ * @param {Object} context - Additional context (IP, user agent, etc.)
+ */
+export const logBookUpdate = (bookId, oldData, newData, changedBy = 'system', context = {}) => {
+    enqueueLogJob('audit:update', async () => {
+        if (!AuditTrailStore.enabled) {
+            return;
+        }
 
-export const logBookUpdate = (bookId, oldData, newData, changedBy = 'system') => {
-    enqueueLogJob('mysql:audit:update', async () => {
-        const pool = getMySQLPool();
+        const skipFields = ['updated_at', 'created_at', 'id', 'transactions', 'reservations', 'collection_books', 'ebooks'];
         const auditEntries = [];
 
-        const skipFields = ['updated_at', 'created_at', 'id', 'transactions', 'reservations'];
         for (const field of Object.keys(newData)) {
             if (skipFields.includes(field)) continue;
 
@@ -32,31 +33,74 @@ export const logBookUpdate = (bookId, oldData, newData, changedBy = 'system') =>
                 : String(newData[field] ?? '');
 
             if (oldVal !== newVal) {
-                auditEntries.push([
-                    bookId,
-                    'UPDATE',
-                    field,
-                    oldVal,
-                    newVal,
-                    changedBy,
-                    JSON.stringify({ timestamp: new Date() }),
-                ]);
+                auditEntries.push({
+                    book_id: bookId,
+                    book_title: newData.title || oldData.title,
+                    book_isbn: newData.isbn || oldData.isbn,
+                    action: 'UPDATE',
+                    field_name: field,
+                    old_value: oldVal,
+                    new_value: newVal,
+                    changed_by: changedBy,
+                    changed_by_id: context.staffId || null,
+                    changed_at: new Date(),
+                    ip_address: context.ip || null,
+                    user_agent: context.userAgent || null,
+                    metadata: JSON.stringify({ timestamp: new Date() }),
+                });
             }
         }
 
-        if (auditEntries.length > 0) {
-            await pool.query(
-                `INSERT INTO audit_trail (book_id, action, field_name, old_value, new_value, changed_by, metadata)
-                 VALUES ?`,
-                [auditEntries]
-            );
+        // Batch insert
+        for (const entry of auditEntries) {
+            await AuditTrailStore.insertOne(entry);
         }
     });
 };
 
-export const logBookDeletion = (bookId, bookData, deletedBy = 'system') => {
-    enqueueLogJob('mysql:audit:delete', async () => {
-        const pool = getMySQLPool();
+/**
+ * Log book creation to audit trail
+ */
+export const logBookCreation = (bookId, bookData, createdBy = 'system', context = {}) => {
+    enqueueLogJob('audit:insert', async () => {
+        if (!AuditTrailStore.enabled) {
+            return;
+        }
+
+        await AuditTrailStore.insertOne({
+            book_id: bookId,
+            book_title: bookData.title,
+            book_isbn: bookData.isbn,
+            action: 'INSERT',
+            field_name: 'complete_record',
+            old_value: null,
+            new_value: JSON.stringify(bookData),
+            changed_by: createdBy,
+            changed_by_id: context.staffId || null,
+            changed_at: new Date(),
+            ip_address: context.ip || null,
+            user_agent: context.userAgent || null,
+            metadata: JSON.stringify({ 
+                timestamp: new Date(),
+                created_book_data: {
+                    title: bookData.title,
+                    author: bookData.author,
+                    isbn: bookData.isbn,
+                }
+            }),
+        });
+    });
+};
+
+/**
+ * Log book deletion to audit trail
+ */
+export const logBookDeletion = (bookId, bookData, deletedBy = 'system', context = {}) => {
+    enqueueLogJob('audit:delete', async () => {
+        if (!AuditTrailStore.enabled) {
+            return;
+        }
+
         const metadata = {
             timestamp: new Date(),
             deleted_book_data: {
@@ -66,92 +110,96 @@ export const logBookDeletion = (bookId, bookData, deletedBy = 'system') => {
             },
         };
 
-        await pool.query(
-            `INSERT INTO audit_trail (book_id, action, field_name, old_value, new_value, changed_by, metadata)
-             VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [
-                bookId,
-                'DELETE',
-                'complete_record',
-                JSON.stringify(bookData),
-                null,
-                deletedBy,
-                JSON.stringify(metadata),
-            ]
-        );
+        await AuditTrailStore.insertOne({
+            book_id: bookId,
+            book_title: bookData.title,
+            book_isbn: bookData.isbn,
+            action: 'DELETE',
+            field_name: 'complete_record',
+            old_value: JSON.stringify(bookData),
+            new_value: null,
+            changed_by: deletedBy,
+            changed_by_id: context.staffId || null,
+            changed_at: new Date(),
+            ip_address: context.ip || null,
+            user_agent: context.userAgent || null,
+            metadata: JSON.stringify(metadata),
+        });
     });
 };
 
 export const getBookAuditHistory = async (bookId, limit = 100) => {
     try {
-        const pool = getMySQLPool();
+        if (!AuditTrailStore.enabled) {
+            return [];
+        }
+
         const { limit: safeLimit } = parseOffsetLimitPagination(
             { limit, offset: 0 },
             { defaultLimit: 100, maxLimit: MAX_LIMIT, maxOffset: 0 }
         );
 
-        const [rows] = await pool.query(
-            `SELECT ${AUDIT_SELECT_COLUMNS}
-             FROM audit_trail
-             WHERE book_id = ?
-             ORDER BY changed_at DESC
-             LIMIT ?`,
-            [bookId, safeLimit]
+        const rows = await AuditTrailStore.find(
+            { book_id: bookId },
+            { sort: { changed_at: -1 }, limit: safeLimit }
         );
+
         return rows;
     } catch (error) {
-        console.error('Failed to retrieve audit history from MySQL:', error.message);
+        console.error('Failed to retrieve audit history:', error.message);
         return [];
     }
 };
 
 export const getAllAuditLogs = async (limit = 100, offset = 0) => {
     try {
-        const pool = getMySQLPool();
+        if (!AuditTrailStore.enabled) {
+            return [];
+        }
+
         const { limit: safeLimit, offset: safeOffset } = parseOffsetLimitPagination(
             { limit, offset },
             { defaultLimit: 100, maxLimit: MAX_LIMIT, maxOffset: 5000 }
         );
 
-        const [rows] = await pool.query(
-            `SELECT ${AUDIT_SELECT_COLUMNS}
-             FROM audit_trail
-             ORDER BY changed_at DESC
-             LIMIT ? OFFSET ?`,
-            [safeLimit, safeOffset]
+        const rows = await AuditTrailStore.find(
+            {},
+            { sort: { changed_at: -1 }, limit: safeLimit, skip: safeOffset }
         );
+
         return rows;
     } catch (error) {
-        console.error('Failed to retrieve audit logs from MySQL:', error.message);
+        console.error('Failed to retrieve audit logs:', error.message);
         return [];
     }
 };
 
 export const getAuditLogsByAction = async (action, limit = 100) => {
     try {
-        const pool = getMySQLPool();
+        if (!AuditTrailStore.enabled) {
+            return [];
+        }
+
         const { limit: safeLimit } = parseOffsetLimitPagination(
             { limit, offset: 0 },
             { defaultLimit: 100, maxLimit: MAX_LIMIT, maxOffset: 0 }
         );
 
-        const [rows] = await pool.query(
-            `SELECT ${AUDIT_SELECT_COLUMNS}
-             FROM audit_trail
-             WHERE action = ?
-             ORDER BY changed_at DESC
-             LIMIT ?`,
-            [action, safeLimit]
+        const rows = await AuditTrailStore.find(
+            { action },
+            { sort: { changed_at: -1 }, limit: safeLimit }
         );
+
         return rows;
     } catch (error) {
-        console.error('Failed to retrieve audit logs from MySQL:', error.message);
+        console.error('Failed to retrieve audit logs:', error.message);
         return [];
     }
 };
 
 export default {
     logBookUpdate,
+    logBookCreation,
     logBookDeletion,
     getBookAuditHistory,
     getAllAuditLogs,

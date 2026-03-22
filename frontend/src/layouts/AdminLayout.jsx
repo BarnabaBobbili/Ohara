@@ -1,208 +1,248 @@
-import { Outlet, useLocation, Link } from 'react-router-dom';
-import { useState } from 'react';
+import { Outlet, useLocation, Link, useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { authAPI } from '../services/api';
 
 export default function AdminLayout() {
     const location = useLocation();
+    const navigate = useNavigate();
     const [isCollapsed, setIsCollapsed] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const [currentTime, setCurrentTime] = useState(new Date());
+    const [userData, setUserData] = useState({ name: 'Admin User', role: 'Head Librarian' });
 
-    const isActive = (path) => {
-        return location.pathname === path || location.pathname.startsWith(path + '/');
-    };
+    useEffect(() => {
+        const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+        return () => clearInterval(timer);
+    }, []);
+
+    useEffect(() => {
+        authAPI.getCurrentStaff()
+            .then(user => {
+                if (user) {
+                    setUserData({
+                        name: user.name || 'Admin User',
+                        role: user.role === 'admin' ? 'Head Librarian' : 'Staff'
+                    });
+                }
+            })
+            .catch(() => {});
+    }, []);
+
+    const isActive = (path) => location.pathname === path || location.pathname.startsWith(path + '/');
 
     const navItems = [
-        { path: '/admin', icon: 'library_books', label: 'The Registry', exact: true },
-        { path: '/admin/books', icon: 'inventory_2', label: 'The Archives' },
+        { path: '/admin', icon: 'dashboard', label: 'Registry', exact: true },
+        { path: '/admin/books', icon: 'auto_stories', label: 'Archives' },
         { path: '/admin/circulation', icon: 'sync_alt', label: 'Circulation' },
-        { path: '/admin/members', icon: 'person_search', label: 'Patrons' },
+        { path: '/admin/members', icon: 'groups', label: 'Patrons' },
+        { path: '/admin/cms', icon: 'edit_note', label: 'CMS Studio' },
+        { path: '/admin/content', icon: 'campaign', label: 'News & Alerts' },
+        { path: '/admin/ebooks', icon: 'menu_book', label: 'Digital Library' },
+        { path: '/admin/reports', icon: 'analytics', label: 'Analytics' },
         { path: '/admin/audit-trail', icon: 'history', label: 'Audit Trail' },
-        { path: '/admin/reports', icon: 'bar_chart', label: 'Analytics' },
-        { path: '/admin/settings', icon: 'settings', label: 'Configuration' },
+        { path: '/admin/settings', icon: 'tune', label: 'Settings' },
     ];
 
     return (
-        <div className="flex h-screen w-full relative">
-            {/* Mobile Menu Backdrop */}
-            {isMobileMenuOpen && (
-                <div
-                    className="fixed inset-0 bg-black/50 z-40 lg:hidden"
-                    onClick={() => setIsMobileMenuOpen(false)}
-                />
-            )}
+        <>
+            <style>{`
+                @import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,300;0,400;0,600;0,700;1,400;1,600&family=Noto+Sans:wght@300;400;500;600;700&display=swap');
+                
+                .bg-paper-grain {
+                    background-image: url('data:image/svg+xml,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="noiseFilter"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23noiseFilter)" opacity="0.05"/%3E%3C/svg%3E');
+                }
+                
+                ::-webkit-scrollbar { width: 8px; }
+                ::-webkit-scrollbar-track { background: #E8E4DF; }
+                ::-webkit-scrollbar-thumb { background: #c16549; border-radius: 4px; }
+                ::-webkit-scrollbar-thumb:hover { background: #a14d39; }
+            `}</style>
 
-            {/* Mobile Hamburger Button */}
-            <button
-                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                className="fixed top-4 left-4 z-50 lg:hidden w-12 h-12 bg-[#8d4d3f] rounded-md shadow-lg flex items-center justify-center text-white"
-            >
-                <span className="material-symbols-outlined">
-                    {isMobileMenuOpen ? 'close' : 'menu'}
-                </span>
-            </button>
+            <div className="flex h-screen w-full relative bg-[#FAF7F2] overflow-hidden" style={{ fontFamily: "'Newsreader', serif" }}>
+                {/* Paper grain texture overlay */}
+                <div className="fixed inset-0 pointer-events-none z-50 mix-blend-multiply opacity-30 bg-paper-grain"></div>
 
-            {/* SIDE NAVIGATION: THE SPINE */}
-            <aside
-                className={`
-                    fixed lg:relative
-                    ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-                    ${isCollapsed ? 'w-20' : 'w-80'} 
-                    h-full bg-[#8d4d3f] z-40 lg:z-20
-                    border-r border-white/5 
-                    transition-all duration-300 ease-in-out
-                    flex flex-col
-                `}
-                style={{ boxShadow: 'inset -15px 0 30px -5px rgba(0,0,0,0.4)' }}
-            >
-                {/* Spine Header / Classification */}
-                <div className={`pt-10 pb-8 ${isCollapsed ? 'px-4' : 'px-8'} flex flex-col gap-4 border-b border-white/10 relative transition-all`}>
-                    {/* Decorative Binding Line */}
-                    <div className="absolute top-4 left-0 w-full h-[1px] bg-white/20"></div>
-                    <div className="absolute top-5 left-0 w-full h-[1px] bg-white/10"></div>
+                {/* Mobile Backdrop */}
+                {isMobileMenuOpen && (
+                    <div className="fixed inset-0 bg-[#1E1815]/60 backdrop-blur-sm z-40 lg:hidden" onClick={() => setIsMobileMenuOpen(false)} />
+                )}
 
-                    {!isCollapsed && (
-                        <div className="flex flex-col items-start gap-1">
-                            <div className="border border-[#eaddcf]/40 px-2 py-1 rounded-sm mb-2 backdrop-blur-sm">
-                                <span className="text-[#eaddcf] text-[10px] font-bold tracking-[0.25em] uppercase font-sans">LOC-REF-2024</span>
-                            </div>
-                            <h1 className="text-white text-3xl font-medium italic tracking-tight leading-none" style={{ fontFamily: "'Newsreader', serif" }}>
-                                Librarian's<br />Ledger
-                            </h1>
-                        </div>
-                    )}
+                {/* Mobile Menu Button */}
+                <button
+                    onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                    className="fixed top-5 left-5 z-50 lg:hidden w-11 h-11 bg-[#c16549] rounded-full shadow-xl flex items-center justify-center text-white hover:scale-110 transition-transform"
+                >
+                    <span className="material-symbols-outlined text-xl">
+                        {isMobileMenuOpen ? 'close' : 'menu'}
+                    </span>
+                </button>
 
-                    {isCollapsed && (
-                        <div className="flex justify-center">
-                            <span className="material-symbols-outlined text-white text-3xl" style={{ fontVariationSettings: "'FILL' 1, 'wght' 400" }}>local_library</span>
-                        </div>
-                    )}
-                </div>
-
-                {/* Navigation Links (Spine Items) */}
-                <nav className="flex-1 flex flex-col py-4 overflow-y-auto">
-                    {navItems.map((item) => {
-                        const active = item.exact
-                            ? location.pathname === item.path
-                            : isActive(item.path);
-
-                        if (active) {
-                            // Active Item: The 'Index Card' look
-                            return (
-                                <Link
-                                    key={item.path}
-                                    to={item.path}
-                                    className={`group relative flex items-center ${isCollapsed ? 'pl-4 pr-2 justify-center' : 'pl-8 pr-4'} py-5 mb-1 cursor-pointer transition-all`}
-                                    onClick={() => setIsMobileMenuOpen(false)}
-                                >
-                                    {/* The Card Tab Background */}
-                                    <div className="absolute inset-y-1 left-2 right-2 bg-[#f2f0e4] rounded-r-md rounded-l-sm z-0 transition-all duration-300"
-                                        style={{ boxShadow: '2px 4px 10px rgba(0,0,0,0.2)' }}></div>
-
-                                    {/* Content */}
-                                    <div className={`relative z-10 flex items-center ${isCollapsed ? 'justify-center' : 'gap-4'} text-[#8d4d3f] w-full`}>
-                                        <span className="material-symbols-outlined text-[28px]" style={{ fontVariationSettings: "'FILL' 1, 'wght' 400" }}>
-                                            {item.icon}
-                                        </span>
-                                        {!isCollapsed && (
-                                            <span className="text-xl font-semibold tracking-wide" style={{ fontFamily: "'Newsreader', serif" }}>
-                                                {item.label}
-                                            </span>
-                                        )}
+                {/* SIDEBAR: Editorial Minimalist */}
+                <aside
+                    className={`
+                        fixed lg:relative z-40 lg:z-20
+                        ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+                        ${isCollapsed ? 'w-20' : 'w-64'}
+                        h-full bg-white border-r-2 border-[#E8E4DF]
+                        transition-all duration-300 ease-in-out
+                        flex flex-col shadow-2xl lg:shadow-none
+                    `}
+                >
+                    {/* Header: Ohara Branding */}
+                    <div className={`${isCollapsed ? 'px-4 pt-8 pb-6' : 'px-6 pt-10 pb-8'} border-b border-[#E8E4DF] transition-all`}>
+                        {!isCollapsed ? (
+                            <div className="space-y-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-11 h-11 bg-[#c16549] rounded-full flex items-center justify-center shadow-sm">
+                                        <span className="material-symbols-outlined text-white text-[22px]" style={{ fontVariationSettings: "'FILL' 1" }}>local_library</span>
                                     </div>
+                                    <div>
+                                        <h1 className="text-[#1E1815] text-[26px] font-bold tracking-tight leading-none">Ohara</h1>
+                                        <p className="text-[#6B6560] text-[9px] font-bold tracking-[0.18em] uppercase" style={{ fontFamily: "'Noto Sans', sans-serif" }}>Admin Portal</p>
+                                    </div>
+                                </div>
+                                <div className="h-[1px] bg-[#E8E4DF]"></div>
+                                <div className="flex items-center gap-2 text-[10px] font-medium tracking-widest uppercase text-[#6B6560]" style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                    <span className="material-symbols-outlined text-[14px] text-[#c16549]">verified</span>
+                                    Authenticated
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="flex justify-center">
+                                <div className="w-11 h-11 bg-[#c16549] rounded-full flex items-center justify-center shadow-sm">
+                                    <span className="material-symbols-outlined text-white text-[22px]" style={{ fontVariationSettings: "'FILL' 1" }}>local_library</span>
+                                </div>
+                            </div>
+                        )}
+                    </div>
 
-                                    {/* Little arrow hint */}
-                                    {!isCollapsed && (
-                                        <span className="material-symbols-outlined relative z-10 text-[#8d4d3f]/50 ml-auto text-lg">arrow_right</span>
-                                    )}
-                                </Link>
-                            );
-                        } else {
-                            // Inactive Item
+                    {/* Navigation */}
+                    <nav className="flex-1 py-6 overflow-y-auto" style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                        {navItems.map((item) => {
+                            const active = item.exact ? location.pathname === item.path : isActive(item.path);
+                            
                             return (
                                 <Link
                                     key={item.path}
                                     to={item.path}
-                                    className={`group relative flex items-center ${isCollapsed ? 'gap-0 pl-4 pr-2 justify-center' : 'gap-4 pl-10 pr-6'} py-5 border-b border-white/10 cursor-pointer hover:bg-black/10 transition-colors`}
                                     onClick={() => setIsMobileMenuOpen(false)}
+                                    className={`
+                                        group relative flex items-center gap-3
+                                        ${isCollapsed ? 'justify-center px-4' : 'px-6'}
+                                        py-3 mb-1
+                                        ${active 
+                                            ? 'bg-[#c16549] text-white shadow-sm' 
+                                            : 'text-[#1E1815] hover:bg-[#FAF7F2] hover:text-[#c16549]'
+                                        }
+                                        transition-all duration-200
+                                        border-l-4 ${active ? 'border-[#a14d39]' : 'border-transparent hover:border-[#E8E4DF]'}
+                                    `}
                                 >
-                                    <span className="material-symbols-outlined text-[#eaddcf] text-[26px] opacity-70 group-hover:opacity-100 transition-opacity">
+                                    <span className={`material-symbols-outlined text-[22px] transition-all ${active ? '' : 'group-hover:scale-110'}`}
+                                        style={{ fontVariationSettings: active ? "'FILL' 1" : "'FILL' 0" }}>
                                         {item.icon}
                                     </span>
                                     {!isCollapsed && (
-                                        <span className="text-[#eaddcf] text-lg font-normal tracking-wide opacity-80 group-hover:opacity-100 transition-opacity" style={{ fontFamily: "'Newsreader', serif" }}>
-                                            {item.label}
-                                        </span>
+                                        <span className="text-[15px] font-medium tracking-wide">{item.label}</span>
+                                    )}
+                                    {!isCollapsed && active && (
+                                        <span className="material-symbols-outlined text-sm ml-auto">arrow_forward_ios</span>
                                     )}
                                 </Link>
                             );
-                        }
-                    })}
-                </nav>
+                        })}
+                    </nav>
 
-                {/* Spine Footer / User Profile */}
-                <div className="p-6 bg-[#753e32]/40 border-t border-white/10" style={{ boxShadow: 'inset -15px 0 30px -5px rgba(0,0,0,0.4)' }}>
-                    {!isCollapsed && (
-                        <div className="flex items-center gap-3 opacity-90 hover:opacity-100 transition-opacity cursor-pointer">
-                            <div className="h-10 w-10 rounded-full bg-[#eaddcf] flex items-center justify-center text-[#8d4d3f] shadow-inner border border-white/20">
-                                <span className="material-symbols-outlined">account_circle</span>
+                    {/* User Profile Footer */}
+                    <div className={`${isCollapsed ? 'px-3 py-4' : 'px-6 py-5'} border-t border-[#E8E4DF] bg-[#F8F6F4]`}>
+                        {!isCollapsed ? (
+                            <div 
+                                className="flex items-center gap-3 cursor-pointer group"
+                                onClick={() => navigate('/admin/settings')}
+                            >
+                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#c16549] to-[#a14d39] flex items-center justify-center text-white shadow-sm group-hover:shadow-md transition-shadow">
+                                    <span className="text-sm font-bold">{userData.name.charAt(0)}</span>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-[#1E1815] text-sm font-semibold truncate leading-tight">{userData.name}</p>
+                                    <p className="text-[#6B6560] text-[10px] uppercase tracking-wider font-medium" style={{ fontFamily: "'Noto Sans', sans-serif" }}>{userData.role}</p>
+                                </div>
+                                <span className="material-symbols-outlined text-[#6B6560] text-lg group-hover:text-[#c16549] transition-colors">settings</span>
                             </div>
-                            <div className="flex flex-col">
-                                <span className="text-sm font-medium text-[#eaddcf] leading-tight">Admin User</span>
-                                <span className="text-xs text-[#eaddcf]/60 uppercase tracking-wider font-sans">Head Librarian</span>
+                        ) : (
+                            <div className="flex justify-center cursor-pointer" onClick={() => navigate('/admin/settings')}>
+                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#c16549] to-[#a14d39] flex items-center justify-center text-white shadow-sm hover:shadow-md transition-shadow">
+                                    <span className="text-sm font-bold">{userData.name.charAt(0)}</span>
+                                </div>
                             </div>
-                        </div>
-                    )}
-                    {isCollapsed && (
-                        <div className="flex justify-center">
-                            <div className="h-10 w-10 rounded-full bg-[#eaddcf] flex items-center justify-center text-[#8d4d3f] shadow-inner border border-white/20">
-                                <span className="material-symbols-outlined">account_circle</span>
-                            </div>
-                        </div>
-                    )}
-                </div>
+                        )}
+                    </div>
 
-                {/* Toggle Handle (Desktop Only) */}
-                <button
-                    onClick={() => setIsCollapsed(!isCollapsed)}
-                    className="hidden lg:flex absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-12 bg-[#8d4d3f] border border-white/20 shadow-lg rounded-r-md items-center justify-center cursor-pointer hover:w-8 transition-all z-30"
-                    title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                    {/* Collapse Toggle */}
+                    <button
+                        onClick={() => setIsCollapsed(!isCollapsed)}
+                        className="hidden lg:block absolute -right-3 top-20 w-6 h-6 bg-white border-2 border-[#E8E4DF] rounded-full shadow-md hover:bg-[#c16549] hover:border-[#c16549] hover:text-white transition-all z-30 flex items-center justify-center"
+                    >
+                        <span className="material-symbols-outlined text-[14px]">
+                            {isCollapsed ? 'chevron_right' : 'chevron_left'}
+                        </span>
+                    </button>
+                </aside>
+
+                {/* MAIN CONTENT */}
+                <main 
+                    className="flex-1 relative flex flex-col bg-[#FAF7F2] overflow-auto"
+                    onClick={() => isMobileMenuOpen && setIsMobileMenuOpen(false)}
                 >
-                    <span className="material-symbols-outlined text-white/70 text-sm">
-                        {isCollapsed ? 'chevron_right' : 'chevron_left'}
-                    </span>
-                </button>
-            </aside>
+                    {/* Top Bar */}
+                    <header className="sticky top-0 z-40 bg-white border-b border-[#E8E4DF] px-6 py-4 shadow-sm">
+                        <div className="flex items-center justify-between">
+                            {/* Breadcrumb & Title */}
+                            <div className="flex items-center gap-4">
+                                <div className="hidden md:block text-[10px] font-bold tracking-[0.2em] uppercase text-[#c16549]" style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                    {navItems.find(item => item.exact ? location.pathname === item.path : isActive(item.path))?.label || 'Dashboard'}
+                                </div>
+                                <span className="hidden md:block text-[#E8E4DF]">|</span>
+                                <div className="flex items-center gap-2">
+                                    <span className="material-symbols-outlined text-[#c16549] text-lg">folder_open</span>
+                                    <span className="text-sm text-[#6B6560]" style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                        {currentTime.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+                                    </span>
+                                </div>
+                            </div>
 
-            {/* MAIN CONTENT AREA */}
-            <main className="flex-1 relative flex flex-col bg-[#1d1715] overflow-auto w-full"
-                onClick={() => isMobileMenuOpen && setIsMobileMenuOpen(false)}>
-                {/* Background Texture/Gradient hint */}
-                <div className="absolute inset-0 bg-gradient-radial from-[#2a2220] via-[#1d1715] to-[#1d1715] pointer-events-none"></div>
+                            {/* Right: Clock, Notifications */}
+                            <div className="flex items-center gap-4">
+                                {/* Clock */}
+                                <div className="hidden sm:flex items-center gap-2 px-4 py-2 bg-[#FAF7F2] border border-[#E8E4DF] rounded-lg">
+                                    <span className="material-symbols-outlined text-[#c16549] text-[18px]">schedule</span>
+                                    <span className="text-[#1E1815] text-sm font-mono font-semibold tabular-nums">
+                                        {currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                                    </span>
+                                </div>
 
-                <div className="relative z-10 h-full">
-                    <Outlet />
-                </div>
-            </main>
+                                {/* Notifications */}
+                                <button className="relative p-2 hover:bg-[#FAF7F2] rounded-full transition-colors group">
+                                    <span className="material-symbols-outlined text-[#6B6560] text-[22px] group-hover:text-[#c16549] transition-colors">notifications</span>
+                                    <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#c16549] rounded-full animate-pulse"></span>
+                                </button>
 
-            <style>{`
-                .material-symbols-outlined {
-                    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-                }
-                
-                ::-webkit-scrollbar {
-                    width: 6px;
-                }
-                ::-webkit-scrollbar-track {
-                    background: #1d1715; 
-                }
-                ::-webkit-scrollbar-thumb {
-                    background: #444; 
-                    border-radius: 3px;
-                }
-                
-                .bg-gradient-radial {
-                    background: radial-gradient(ellipse at top right, #2a2220, #1d1715 50%, #1d1715);
-                }
-            `}</style>
-        </div>
+                                {/* Home */}
+                                <button 
+                                    onClick={() => navigate('/')}
+                                    className="p-2 hover:bg-[#FAF7F2] rounded-full transition-colors"
+                                >
+                                    <span className="material-symbols-outlined text-[#6B6560] text-[22px]">home</span>
+                                </button>
+                            </div>
+                        </div>
+                    </header>
+
+                    <div className="flex-1 overflow-auto">
+                        <Outlet />
+                    </div>
+                </main>
+            </div>
+        </>
     );
 }
