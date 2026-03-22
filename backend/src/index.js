@@ -6,6 +6,7 @@ import { connectMongoDB, checkMongoConnection, closeMongoDB } from './db/mongodb
 import { connectNeo4j, checkNeo4jConnection, closeNeo4j } from './db/neo4j.js';
 import { connectMySQL, checkMySQLConnection, closeMySQL } from './db/mysql.js';
 import { ensurePostgresIndexes } from './db/postgresIndexes.js';
+import { validateDataStoreConfig, DATA_STORES } from './config/dataStores.js';
 import { getCacheStats } from './utils/cache.js';
 import { getLogQueueStats } from './db/logQueue.js';
 import fs from 'fs';
@@ -124,6 +125,14 @@ const startServer = async () => {
     console.log('='.repeat(60));
     console.log('Initializing databases...');
     console.log('='.repeat(60));
+
+    // Validate dynamic data store configuration
+    try {
+        validateDataStoreConfig();
+    } catch (error) {
+        console.error('❌ Data store configuration validation failed');
+        process.exit(1);
+    }
 
     try {
         await prisma.$queryRaw`SELECT 1`;

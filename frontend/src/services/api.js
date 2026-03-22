@@ -120,6 +120,7 @@ export const dashboardAPI = {
 // ============= Reports API =============
 
 export const reportsAPI = {
+    getStats: () => fetchAPI('/dashboard/stats', { headers: getAdminAuthHeaders() }), // Alias for reports
     getActivityLogs: (params = {}) => {
         const queryParams = new URLSearchParams(params).toString();
         return fetchAPI(`/reports/activity-logs?${queryParams}`, { headers: getAdminAuthHeaders() });
@@ -233,10 +234,11 @@ export const financialAPI = {
 // ============= Staff Board API (Admin) =============
 
 export const staffBoardAPI = {
-    getAll:  ()       => fetchAPI('/staff-board', { headers: getAdminAuthHeaders() }),
-    create:  (data)   => fetchAPI('/staff-board', { method: 'POST', body: JSON.stringify(data), headers: getAdminAuthHeaders() }),
-    update:  (id, data) => fetchAPI(`/staff-board/${id}`, { method: 'PUT', body: JSON.stringify(data), headers: getAdminAuthHeaders() }),
-    remove:  (id)     => fetchAPI(`/staff-board/${id}`, { method: 'DELETE', headers: getAdminAuthHeaders() }),
+    getAll:   ()       => fetchAPI('/staff-board', { headers: getAdminAuthHeaders() }),
+    getPosts: ()       => fetchAPI('/staff-board', { headers: getAdminAuthHeaders() }), // Alias for getAll
+    create:   (data)   => fetchAPI('/staff-board', { method: 'POST', body: JSON.stringify(data), headers: getAdminAuthHeaders() }),
+    update:   (id, data) => fetchAPI(`/staff-board/${id}`, { method: 'PUT', body: JSON.stringify(data), headers: getAdminAuthHeaders() }),
+    remove:   (id)     => fetchAPI(`/staff-board/${id}`, { method: 'DELETE', headers: getAdminAuthHeaders() }),
 };
 
 // ============= Ebooks API (Admin) =============

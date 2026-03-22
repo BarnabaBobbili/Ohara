@@ -47,7 +47,7 @@ router.get('/', authenticateToken, requireAdmin, async (req, res) => {
         const ebooks = await prisma.ebooks.findMany({
             orderBy: { uploaded_at: 'desc' },
             include: {
-                book: {
+                books: {
                     select: {
                         id: true,
                         title: true,

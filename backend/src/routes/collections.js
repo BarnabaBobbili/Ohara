@@ -11,7 +11,8 @@ const mapCollection = (collection) => ({
     cover_image:   collection.cover_image,
     display_order: collection.display_order,
     is_active:     collection.is_active,
-    books:         collection.collection_books.map(cb => cb.book),
+    is_pinned:     collection.is_pinned,
+    books:         collection.collection_books.map(cb => cb.books),
 });
 
 // ─── GET /api/collections ─────────────────────────────────────
@@ -25,7 +26,7 @@ router.get('/', async (req, res) => {
                 collection_books: {
                     orderBy: { display_order: 'asc' },
                     include: {
-                        book: {
+                        books: {
                             select: {
                                 id: true,
                                 title: true,
@@ -57,7 +58,7 @@ router.get('/pinned', async (req, res) => {
                 collection_books: {
                     orderBy: { display_order: 'asc' },
                     include: {
-                        book: {
+                        books: {
                             select: {
                                 id: true,
                                 title: true,
@@ -87,7 +88,7 @@ router.get('/admin/all', authenticateToken, requireAdmin, async (req, res) => {
                 collection_books: {
                     orderBy: { display_order: 'asc' },
                     include: {
-                        book: {
+                        books: {
                             select: {
                                 id: true,
                                 title: true,
@@ -116,7 +117,7 @@ router.get('/:id', async (req, res) => {
             include: {
                 collection_books: {
                     orderBy: { display_order: 'asc' },
-                    include: { book: true },
+                    include: { books: true },
                 },
             },
         });
@@ -135,8 +136,22 @@ router.get('/:id', async (req, res) => {
 router.post('/', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { name, description, cover_image, display_order, is_active } = req.body;
+        
+        // Generate slug from name
+        const slug = name
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+        
         const collection = await prisma.collections.create({
-            data: { name, description, cover_image, display_order: display_order || 0, is_active: is_active ?? true },
+            data: { 
+                name, 
+                slug,
+                description, 
+                cover_image, 
+                display_order: display_order || 0, 
+                is_active: is_active ?? true 
+            },
         });
         res.status(201).json(collection);
     } catch (error) {
@@ -148,9 +163,20 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
 router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { name, description, cover_image, display_order, is_active, is_pinned } = req.body;
+        
+        // Generate slug if name is being updated
+        const updateData = { description, cover_image, display_order, is_active, is_pinned };
+        if (name) {
+            updateData.name = name;
+            updateData.slug = name
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, '-')
+                .replace(/^-+|-+$/g, '');
+        }
+        
         const collection = await prisma.collections.update({
             where: { id: parseInt(req.params.id) },
-            data:  { name, description, cover_image, display_order, is_active, is_pinned },
+            data:  updateData,
         });
         res.json(collection);
     } catch (error) {

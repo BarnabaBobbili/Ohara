@@ -99,7 +99,7 @@ const processCheckin = async (transactionId, returnCondition, req, res) => {
 
     const transaction = await prisma.transactions.findUnique({
         where: { id: transactionId },
-        include: { book: true, member: true },
+        include: { books: true, members: true },
     });
 
     if (!transaction) {
@@ -122,9 +122,9 @@ const processCheckin = async (transactionId, returnCondition, req, res) => {
     logActivity({
         action: 'checkin',
         book_id: transaction.book_id,
-        book_title: transaction.book.title,
+        book_title: transaction.books.title,
         member_id: transaction.member_id,
-        member_name: transaction.member.name,
+        member_name: transaction.members.name,
         transaction_id: result.id,
         fine_amount: result.fine_amount,
     });
@@ -139,7 +139,7 @@ const processCheckin = async (transactionId, returnCondition, req, res) => {
             await pool.execute(
                 `INSERT INTO audit_trail (book_id, action, changed_by, metadata)
                  VALUES (?, 'RETURN', ?, ?)`,
-                [transaction.book_id, req.actor?.email || transaction.member?.name || 'unknown',
+                [transaction.book_id, req.actor?.email || transaction.members?.name || 'unknown',
                  JSON.stringify({ transaction_id: transactionId, fine_amount: result.fine_amount })]
             );
             if (result.fine_amount > 0) {
@@ -188,7 +188,7 @@ router.get('/active', authenticateToken, requireStaff, async (req, res) => {
         // Optional: filter by ISBN so return desk can find active checkout by book scan
         const where = { status: { in: ['checked_out', 'overdue'] } };
         if (req.query.isbn) {
-            where.book = { isbn: req.query.isbn };
+            where.books = { isbn: req.query.isbn };
         }
         if (req.query.member_id) {
             where.member_id = Number.parseInt(req.query.member_id, 10);
@@ -197,8 +197,8 @@ router.get('/active', authenticateToken, requireStaff, async (req, res) => {
         const transactions = await prisma.transactions.findMany({
             where,
             include: {
-                book: { select: { title: true, isbn: true, author: true, cover_image_url: true } },
-                member: { select: { name: true, card_id: true, email: true } },
+                books: { select: { title: true, isbn: true, author: true, cover_image_url: true } },
+                members: { select: { name: true, card_id: true, email: true } },
             },
             orderBy: { checkout_date: 'desc' },
             skip,
@@ -236,7 +236,7 @@ router.get('/my', authenticateToken, async (req, res) => {
         const transactions = await prisma.transactions.findMany({
             where: { member_id: member.id, status: { in: ['checked_out', 'overdue'] } },
             include: {
-                book: { select: { id: true, title: true, author: true, isbn: true, cover_image_url: true, category: true } },
+                books: { select: { id: true, title: true, author: true, isbn: true, cover_image_url: true, category: true } },
             },
             orderBy: { due_date: 'asc' },
             take: 20,
@@ -259,7 +259,7 @@ router.get('/my-history', authenticateToken, async (req, res) => {
         const transactions = await prisma.transactions.findMany({
             where: { member_id: member.id },
             include: {
-                book: { select: { id: true, title: true, author: true, isbn: true, cover_image_url: true, category: true } },
+                books: { select: { id: true, title: true, author: true, isbn: true, cover_image_url: true, category: true } },
             },
             orderBy: { checkout_date: 'desc' },
             skip,
@@ -287,8 +287,8 @@ router.get('/overdue', authenticateToken, requireStaff, async (req, res) => {
                 due_date: { lt: new Date() },
             },
             include: {
-                book: { select: { title: true, isbn: true, author: true } },
-                member: { select: { name: true, card_id: true, email: true } },
+                books: { select: { title: true, isbn: true, author: true } },
+                members: { select: { name: true, card_id: true, email: true } },
             },
             orderBy: { due_date: 'asc' },
             skip,
@@ -311,7 +311,7 @@ const fetchMemberHistory = async (memberId, query) => {
     return prisma.transactions.findMany({
         where: { member_id: memberId },
         include: {
-            book: { select: { title: true, isbn: true, author: true } },
+            books: { select: { title: true, isbn: true, author: true } },
         },
         orderBy: { checkout_date: 'desc' },
         skip,

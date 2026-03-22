@@ -71,8 +71,8 @@ export default function CirculationDesk() {
     );
 
     const filteredLoans = loans.filter(l =>
-        l.member?.name?.toLowerCase().includes(returnSearch.toLowerCase()) ||
-        l.book?.title?.toLowerCase().includes(returnSearch.toLowerCase())
+        l.members?.name?.toLowerCase().includes(returnSearch.toLowerCase()) ||
+        l.books?.title?.toLowerCase().includes(returnSearch.toLowerCase())
     );
 
     if (loading) {
@@ -218,8 +218,8 @@ export default function CirculationDesk() {
                                     const isOverdue = loan.due_date && new Date(loan.due_date) < new Date();
                                     return (
                                         <tr key={loan.id} className="hover:bg-[#FAF7F2]">
-                                            <td className="p-3 text-sm text-[#1E1815]">{loan.member?.name || 'Unknown'}</td>
-                                            <td className="p-3 text-sm text-[#6B6560]">{loan.book?.title || 'Unknown'}</td>
+                                            <td className="p-3 text-sm text-[#1E1815]">{loan.members?.name || 'Unknown'}</td>
+                                            <td className="p-3 text-sm text-[#6B6560]">{loan.books?.title || 'Unknown'}</td>
                                             <td className="p-3 text-sm text-[#6B6560]">{loan.checkout_date ? new Date(loan.checkout_date).toLocaleDateString() : '-'}</td>
                                             <td className="p-3 text-sm text-[#6B6560]">{loan.due_date ? new Date(loan.due_date).toLocaleDateString() : '-'}</td>
                                             <td className="p-3">

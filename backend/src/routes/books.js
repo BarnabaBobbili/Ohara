@@ -1,7 +1,7 @@
 import express from 'express';
 import prisma from '../db/prisma.js';
 import { logActivity } from '../db/activityLogger.js';
-import { logBookUpdate, logBookDeletion } from '../db/auditLogger.js';
+import { logBookUpdate, logBookDeletion, logBookCreation } from '../db/auditLogger.js';
 import { parseSkipLimitPagination } from '../utils/pagination.js';
 import { invalidateCacheByPrefix } from '../utils/cache.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
@@ -15,7 +15,7 @@ const invalidateAnalyticsCache = () => {
 
 router.get('/', async (req, res) => {
     try {
-        const { category, search } = req.query;
+        const { category, search, genre, language, is_active } = req.query;
         const { skip, limit } = parseSkipLimitPagination(req.query, {
             defaultLimit: 20,
             maxLimit: 100,
@@ -23,8 +23,22 @@ router.get('/', async (req, res) => {
         });
 
         const where = {};
+        
+        // Only show active books by default
+        if (is_active !== 'false') {
+            where.is_active = true;
+        }
+        
         if (category) {
             where.category = category;
+        }
+        
+        if (genre) {
+            where.genre = genre;
+        }
+        
+        if (language) {
+            where.language = language;
         }
 
         if (search) {
@@ -83,8 +97,9 @@ router.get('/:id', async (req, res) => {
 router.post('/', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const {
-            isbn, title, author, publisher, publication_year, category,
+            isbn, title, author, publisher, publication_year, category, genre,
             language, pages, description, cover_image_url, total_copies, location,
+            edition, format, dimensions, weight_grams, tags, is_reference_only,
         } = req.body;
 
         const existing = await prisma.books.findUnique({ where: { isbn } });
@@ -100,6 +115,7 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
                 publisher,
                 publication_year,
                 category,
+                genre,
                 language: language || 'English',
                 pages,
                 description,
@@ -107,16 +123,39 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
                 total_copies: total_copies || 1,
                 available_copies: total_copies || 1,
                 location,
+                edition,
+                format: format || 'Hardcover',
+                dimensions,
+                weight_grams,
+                tags: tags || [],
+                is_reference_only: is_reference_only || false,
+                is_active: true,
             },
         });
 
+        // Log to activity logs (MongoDB)
         logActivity({
             action: 'book_added',
-            book_id: book.id,
-            book_title: book.title,
-            book_author: book.author,
-            isbn: book.isbn,
+            entity_type: 'book',
+            entity_id: book.id,
+            entity_details: {
+                title: book.title,
+                author: book.author,
+                isbn: book.isbn,
+            },
+            performed_by: {
+                type: 'staff',
+                email: req.actor?.email || 'admin',
+            },
         });
+        
+        // Log to audit trail (MySQL)
+        logBookCreation(book.id, book, req.actor?.email || 'admin', {
+            ip: req.ip,
+            userAgent: req.get('user-agent'),
+        });
+        
+        // Sync to Neo4j
         syncBookToNeo4j(book).catch(() => {});
 
         invalidateAnalyticsCache();
@@ -138,10 +177,13 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
             return res.status(404).json({ detail: 'Book not found' });
         }
 
+        // All allowed fields for update
         const allowedFields = [
-            'title', 'author', 'publisher', 'publication_year',
-            'category', 'language', 'pages', 'description',
-            'cover_image_url', 'total_copies', 'location',
+            'isbn', 'title', 'author', 'publisher', 'publication_year',
+            'category', 'genre', 'language', 'pages', 'description',
+            'cover_image_url', 'total_copies', 'available_copies', 'location',
+            'edition', 'format', 'dimensions', 'weight_grams', 'tags',
+            'is_reference_only', 'is_active',
         ];
 
         const updateData = {};
@@ -155,18 +197,57 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
             return res.status(400).json({ detail: 'No fields to update' });
         }
 
+        // If ISBN is being changed, check for duplicates
+        if (updateData.isbn && updateData.isbn !== oldBookData.isbn) {
+            const existingBook = await prisma.books.findUnique({ where: { isbn: updateData.isbn } });
+            if (existingBook) {
+                return res.status(400).json({ detail: 'Book with this ISBN already exists' });
+            }
+        }
+
         const newBookData = await prisma.books.update({
             where: { id: bookId },
             data: updateData,
         });
 
-        logBookUpdate(bookId, oldBookData, newBookData, req.actor?.email || 'admin');
-        logActivity({
-            action: 'book_updated',
-            book_id: bookId,
-            book_title: newBookData.title,
-            fields_changed: Object.keys(updateData),
+        // Only log fields that actually changed (compare old vs new values)
+        const actuallyChangedFields = Object.keys(updateData).filter(field => {
+            const oldVal = oldBookData[field];
+            const newVal = newBookData[field];
+            // Handle different types (string, number, null, array)
+            if (oldVal === null && newVal === null) return false;
+            if (oldVal === null || newVal === null) return true;
+            if (Array.isArray(oldVal) && Array.isArray(newVal)) {
+                return JSON.stringify(oldVal) !== JSON.stringify(newVal);
+            }
+            return String(oldVal) !== String(newVal);
         });
+
+        // Log to audit trail (MySQL) - records field-level changes
+        logBookUpdate(bookId, oldBookData, newBookData, req.actor?.email || 'admin', {
+            ip: req.ip,
+            userAgent: req.get('user-agent'),
+        });
+        
+        // Log to activity logs (MongoDB) - only if something actually changed
+        if (actuallyChangedFields.length > 0) {
+            logActivity({
+                action: 'book_updated',
+                entity_type: 'book',
+                entity_id: bookId,
+                entity_details: {
+                    title: newBookData.title,
+                    author: newBookData.author,
+                    isbn: newBookData.isbn,
+                },
+                fields_changed: actuallyChangedFields,
+                performed_by: {
+                    type: 'staff',
+                    email: req.actor?.email || 'admin',
+                },
+            });
+        }
+        
         syncBookToNeo4j(newBookData).catch(() => {});
 
         invalidateAnalyticsCache();
@@ -201,14 +282,27 @@ router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
 
         await prisma.books.delete({ where: { id: bookId } });
 
+        // Log to activity logs (MongoDB)
         logActivity({
             action: 'book_deleted',
-            book_id: bookInfo.id,
-            book_title: bookInfo.title,
-            book_author: bookInfo.author,
-            isbn: bookInfo.isbn,
+            entity_type: 'book',
+            entity_id: bookInfo.id,
+            entity_details: {
+                title: bookInfo.title,
+                author: bookInfo.author,
+                isbn: bookInfo.isbn,
+            },
+            performed_by: {
+                type: 'staff',
+                email: req.actor?.email || 'admin',
+            },
         });
-        logBookDeletion(bookInfo.id, bookInfo, req.actor?.email || 'admin');
+        
+        // Log to audit trail (MySQL)
+        logBookDeletion(bookInfo.id, bookInfo, req.actor?.email || 'admin', {
+            ip: req.ip,
+            userAgent: req.get('user-agent'),
+        });
 
         invalidateAnalyticsCache();
         res.json({ message: 'Book deleted successfully' });

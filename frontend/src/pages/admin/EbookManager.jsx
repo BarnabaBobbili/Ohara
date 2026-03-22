@@ -1,26 +1,25 @@
-import { useState, useEffect } from 'react';
-import { booksAPI } from '../../services/api';
+import { useState, useEffect, useRef } from 'react';
+import { ebooksAPI, booksAPI } from '../../services/api';
 
 export default function EbookManager() {
     const [ebooks, setEbooks] = useState([]);
+    const [books, setBooks] = useState([]);
     const [search, setSearch] = useState('');
     const [showModal, setShowModal] = useState(false);
     const [editingEbook, setEditingEbook] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [uploading, setUploading] = useState(false);
+    const fileInputRef = useRef(null);
     const [formData, setFormData] = useState({
-        title: '', author: '', isbn: '', genre: '', description: '',
-        cover_image: '', file_url: '', file_format: 'pdf', file_size: '',
-        published_year: '', publisher: '', is_public: true
+        title: '', author: '', book_id: '', is_public: true, file: null
     });
 
-    useEffect(() => { loadEbooks(); }, []);
+    useEffect(() => { loadEbooks(); loadBooks(); }, []);
 
     const loadEbooks = async () => {
         try {
-            const data = await booksAPI.getAll();
-            // Filter for books with file_url (ebooks)
-            const ebooksOnly = Array.isArray(data) ? data.filter(b => b.file_url || b.is_ebook) : [];
-            setEbooks(ebooksOnly);
+            const data = await ebooksAPI.getAll();
+            setEbooks(Array.isArray(data) ? data : []);
         } catch (error) {
             console.error('Failed to load ebooks:', error);
         } finally {
@@ -28,26 +27,52 @@ export default function EbookManager() {
         }
     };
 
+    const loadBooks = async () => {
+        try {
+            const data = await booksAPI.getAll();
+            setBooks(Array.isArray(data) ? data : []);
+        } catch (error) {
+            console.error('Failed to load books:', error);
+        }
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            const ebookData = { ...formData, is_ebook: true };
+            setUploading(true);
             if (editingEbook) {
-                await booksAPI.update(editingEbook.id, ebookData);
+                await ebooksAPI.update(editingEbook.id, {
+                    title: formData.title,
+                    author: formData.author,
+                    book_id: formData.book_id || null,
+                    is_public: formData.is_public
+                });
             } else {
-                await booksAPI.create(ebookData);
+                if (!formData.file) {
+                    alert('Please select a file to upload');
+                    return;
+                }
+                const data = new FormData();
+                data.append('file', formData.file);
+                data.append('title', formData.title);
+                data.append('author', formData.author);
+                if (formData.book_id) data.append('book_id', formData.book_id);
+                data.append('is_public', formData.is_public);
+                await ebooksAPI.create(data);
             }
             loadEbooks();
             closeModal();
         } catch (error) {
             alert('Failed to save ebook: ' + error.message);
+        } finally {
+            setUploading(false);
         }
     };
 
     const handleDelete = async (id) => {
         if (!confirm('Delete this ebook?')) return;
         try {
-            await booksAPI.delete(id);
+            await ebooksAPI.remove(id);
             loadEbooks();
         } catch (error) {
             alert('Failed to delete: ' + error.message);
@@ -57,10 +82,9 @@ export default function EbookManager() {
     const openAddModal = () => {
         setEditingEbook(null);
         setFormData({
-            title: '', author: '', isbn: '', genre: '', description: '',
-            cover_image: '', file_url: '', file_format: 'pdf', file_size: '',
-            published_year: '', publisher: '', is_public: true
+            title: '', author: '', book_id: '', is_public: true, file: null
         });
+        if (fileInputRef.current) fileInputRef.current.value = '';
         setShowModal(true);
     };
 
@@ -69,16 +93,9 @@ export default function EbookManager() {
         setFormData({
             title: ebook.title || '',
             author: ebook.author || '',
-            isbn: ebook.isbn || '',
-            genre: ebook.genre || '',
-            description: ebook.description || '',
-            cover_image: ebook.cover_image || '',
-            file_url: ebook.file_url || '',
-            file_format: ebook.file_format || 'pdf',
-            file_size: ebook.file_size || '',
-            published_year: ebook.published_year || '',
-            publisher: ebook.publisher || '',
-            is_public: ebook.is_public !== false
+            book_id: ebook.book_id || '',
+            is_public: ebook.is_public !== false,
+            file: null
         });
         setShowModal(true);
     };
@@ -95,8 +112,19 @@ export default function EbookManager() {
 
     const formatFileSize = (bytes) => {
         if (!bytes) return '-';
-        const mb = parseInt(bytes) / (1024 * 1024);
+        const mb = Number(bytes) / (1024 * 1024);
         return mb.toFixed(1) + ' MB';
+    };
+
+    const handleFileChange = (e) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            setFormData(prev => ({
+                ...prev,
+                file,
+                title: prev.title || file.name.replace(/\.[^/.]+$/, '')
+            }));
+        }
     };
 
     if (loading) {
@@ -159,8 +187,8 @@ export default function EbookManager() {
                         <div className="flex gap-3 p-4">
                             {/* Cover */}
                             <div className="w-16 h-24 bg-gradient-to-br from-[#c16549] to-[#8d4d3f] flex-shrink-0 relative">
-                                {ebook.cover_image ? (
-                                    <img src={ebook.cover_image} alt={ebook.title} className="w-full h-full object-cover" />
+                                {ebook.cover_path ? (
+                                    <img src={ebook.cover_path} alt={ebook.title} className="w-full h-full object-cover" />
                                 ) : (
                                     <div className="absolute inset-0 flex items-center justify-center">
                                         <span className="material-symbols-outlined text-white/50 text-2xl">menu_book</span>
@@ -178,7 +206,7 @@ export default function EbookManager() {
                                     <span className={`px-1.5 py-0.5 text-[9px] font-medium uppercase ${ebook.is_public !== false ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
                                         {ebook.is_public !== false ? 'Public' : 'Private'}
                                     </span>
-                                    <span className="text-[10px] text-[#6B6560]">{formatFileSize(ebook.file_size)}</span>
+                                    <span className="text-[10px] text-[#6B6560]">{formatFileSize(ebook.file_size_bytes)}</span>
                                 </div>
                                 <div className="flex items-center gap-1 mt-2">
                                     <button onClick={() => openEditModal(ebook)} className="p-1 text-[#6B6560] hover:text-[#c16549]">
@@ -187,10 +215,13 @@ export default function EbookManager() {
                                     <button onClick={() => handleDelete(ebook.id)} className="p-1 text-[#6B6560] hover:text-red-500">
                                         <span className="material-symbols-outlined text-base">delete</span>
                                     </button>
-                                    {ebook.file_url && (
-                                        <a href={ebook.file_url} target="_blank" rel="noopener noreferrer" className="p-1 text-[#6B6560] hover:text-blue-500">
+                                    {ebook.file_path && (
+                                        <a href={`/api/ebooks/${ebook.id}/download`} className="p-1 text-[#6B6560] hover:text-blue-500">
                                             <span className="material-symbols-outlined text-base">download</span>
                                         </a>
+                                    )}
+                                    {ebook.download_count > 0 && (
+                                        <span className="text-[10px] text-[#6B6560] ml-1">{ebook.download_count} downloads</span>
                                     )}
                                 </div>
                             </div>
@@ -216,49 +247,37 @@ export default function EbookManager() {
                             </button>
                         </div>
                         <form onSubmit={handleSubmit} className="p-4 space-y-4">
+                            {!editingEbook && (
+                                <div>
+                                    <label className="block text-xs font-semibold text-[#6B6560] uppercase tracking-wide mb-1">File (PDF/EPUB) *</label>
+                                    <input 
+                                        ref={fileInputRef}
+                                        type="file" 
+                                        accept=".pdf,.epub" 
+                                        onChange={handleFileChange}
+                                        className="w-full px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none" 
+                                    />
+                                    {formData.file && (
+                                        <p className="text-xs text-green-600 mt-1">Selected: {formData.file.name}</p>
+                                    )}
+                                </div>
+                            )}
                             <div>
                                 <label className="block text-xs font-semibold text-[#6B6560] uppercase tracking-wide mb-1">Title *</label>
                                 <input required value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} className="w-full px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none" />
                             </div>
                             <div>
-                                <label className="block text-xs font-semibold text-[#6B6560] uppercase tracking-wide mb-1">Author *</label>
-                                <input required value={formData.author} onChange={e => setFormData({...formData, author: e.target.value})} className="w-full px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none" />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs font-semibold text-[#6B6560] uppercase tracking-wide mb-1">ISBN</label>
-                                    <input value={formData.isbn} onChange={e => setFormData({...formData, isbn: e.target.value})} className="w-full px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none" />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-semibold text-[#6B6560] uppercase tracking-wide mb-1">Genre</label>
-                                    <input value={formData.genre} onChange={e => setFormData({...formData, genre: e.target.value})} className="w-full px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none" />
-                                </div>
+                                <label className="block text-xs font-semibold text-[#6B6560] uppercase tracking-wide mb-1">Author</label>
+                                <input value={formData.author} onChange={e => setFormData({...formData, author: e.target.value})} className="w-full px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none" />
                             </div>
                             <div>
-                                <label className="block text-xs font-semibold text-[#6B6560] uppercase tracking-wide mb-1">File URL *</label>
-                                <input required value={formData.file_url} onChange={e => setFormData({...formData, file_url: e.target.value})} placeholder="https://..." className="w-full px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none" />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs font-semibold text-[#6B6560] uppercase tracking-wide mb-1">Format</label>
-                                    <select value={formData.file_format} onChange={e => setFormData({...formData, file_format: e.target.value})} className="w-full px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none">
-                                        <option value="pdf">PDF</option>
-                                        <option value="epub">EPUB</option>
-                                        <option value="mobi">MOBI</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-semibold text-[#6B6560] uppercase tracking-wide mb-1">File Size (bytes)</label>
-                                    <input type="number" value={formData.file_size} onChange={e => setFormData({...formData, file_size: e.target.value})} className="w-full px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none" />
-                                </div>
-                            </div>
-                            <div>
-                                <label className="block text-xs font-semibold text-[#6B6560] uppercase tracking-wide mb-1">Cover Image URL</label>
-                                <input value={formData.cover_image} onChange={e => setFormData({...formData, cover_image: e.target.value})} placeholder="https://..." className="w-full px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none" />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-semibold text-[#6B6560] uppercase tracking-wide mb-1">Description</label>
-                                <textarea rows="3" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} className="w-full px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none resize-none" />
+                                <label className="block text-xs font-semibold text-[#6B6560] uppercase tracking-wide mb-1">Link to Book (optional)</label>
+                                <select value={formData.book_id} onChange={e => setFormData({...formData, book_id: e.target.value})} className="w-full px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none">
+                                    <option value="">-- No linked book --</option>
+                                    {books.map(book => (
+                                        <option key={book.id} value={book.id}>{book.title} - {book.author}</option>
+                                    ))}
+                                </select>
                             </div>
                             <div className="flex items-center gap-3">
                                 <input type="checkbox" id="is_public" checked={formData.is_public} onChange={e => setFormData({...formData, is_public: e.target.checked})} className="w-4 h-4 text-[#c16549]" />
@@ -266,7 +285,9 @@ export default function EbookManager() {
                             </div>
                             <div className="flex gap-3 pt-2">
                                 <button type="button" onClick={closeModal} className="flex-1 px-4 py-2 border border-[#E8E4DF] text-sm font-medium hover:bg-[#FAF7F2] transition-colors">Cancel</button>
-                                <button type="submit" className="flex-1 px-4 py-2 bg-[#c16549] text-white text-sm font-medium hover:bg-[#a85443] transition-colors">{editingEbook ? 'Update' : 'Add'}</button>
+                                <button type="submit" disabled={uploading} className="flex-1 px-4 py-2 bg-[#c16549] text-white text-sm font-medium hover:bg-[#a85443] transition-colors disabled:opacity-50">
+                                    {uploading ? 'Uploading...' : (editingEbook ? 'Update' : 'Upload')}
+                                </button>
                             </div>
                         </form>
                     </div>

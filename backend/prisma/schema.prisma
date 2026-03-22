@@ -8,217 +8,324 @@ datasource db {
   provider = "postgresql"
 }
 
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model books {
-  id               Int                @id @default(autoincrement())
-  isbn             String             @unique
-  title            String
-  author           String
-  publisher        String?
-  publication_year Int?
-  category         String?
-  language         String?            @default("English")
-  pages            Int?
-  description      String?
-  cover_image_url  String?
-  total_copies     Int                @default(1)
-  available_copies Int                @default(1)
-  location         String?
-  created_at       DateTime           @default(now())
-  updated_at       DateTime           @updatedAt
-  collection_books collection_books[]
-  ebooks           ebooks[]
-  reservations     reservations[]
-  transactions     transactions[]
+  id                Int                @id @default(autoincrement())
+  isbn              String             @unique @db.VarChar(20)
+  title             String             @db.VarChar(500)
+  author            String             @db.VarChar(300)
+  publisher         String?            @db.VarChar(300)
+  publication_year  Int?
+  category          String?            @db.VarChar(100)
+  genre             String?            @db.VarChar(100)
+  language          String?            @default("English") @db.VarChar(50)
+  pages             Int?
+  description       String?
+  cover_image_url   String?
+  total_copies      Int                @default(1)
+  available_copies  Int                @default(1)
+  location          String?            @db.VarChar(100)
+  edition           String?            @db.VarChar(50)
+  format            String?            @default("Hardcover") @db.VarChar(30)
+  dimensions        String?            @db.VarChar(50)
+  weight_grams      Int?
+  tags              String[]
+  is_reference_only Boolean?           @default(false)
+  is_active         Boolean?           @default(true)
+  created_at        DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime           @default(now()) @db.Timestamptz(6)
+  collection_books  collection_books[]
+  ebooks            ebooks[]
+  reservations      reservations[]
+  transactions      transactions[]
 
-  @@index([category])
-  @@index([author])
-  @@index([updated_at])
   @@index([author], map: "idx_books_author")
   @@index([author(ops: raw("gin_trgm_ops"))], map: "idx_books_author_trgm", type: Gin)
+  @@index([available_copies], map: "idx_books_available", where: raw("(available_copies > 0)"))
   @@index([category], map: "idx_books_category")
+  @@index([genre], map: "idx_books_genre")
+  @@index([is_active], map: "idx_books_is_active", where: raw("(is_active = true)"))
   @@index([isbn(ops: raw("gin_trgm_ops"))], map: "idx_books_isbn_trgm", type: Gin)
+  @@index([language], map: "idx_books_language")
+  @@index([publication_year], map: "idx_books_publication_year")
+  @@index([title], map: "idx_books_title")
   @@index([title(ops: raw("gin_trgm_ops"))], map: "idx_books_title_trgm", type: Gin)
   @@index([updated_at(sort: Desc)], map: "idx_books_updated_at")
 }
 
-model members {
-  id                                                  Int                   @id @default(autoincrement())
-  card_id                                             String                @unique
-  name                                                String
-  email                                               String                @unique
-  phone                                               String?
-  address                                             String?
-  password_hash                                       String?
-  member_type                                         String
-  status                                              String                @default("active")
-  fines                                               Float                 @default(0.0)
-  joined_date                                         DateTime              @default(now())
-  expiry_date                                         DateTime?
-  last_visit                                          DateTime?
-  role                                                String                @default("member")
-  supabase_uid                                        String?               @unique @db.Uuid
-  updated_at                                          DateTime              @default(now()) @db.Timestamptz(6)
-  reading_progress                                    reading_progress[]
-  reservations                                        reservations[]
-  transactions_transactions_issued_by_memberTomembers transactions[]        @relation("transactions_issued_by_memberTomembers")
-  transactions                                        transactions[]
-  user_uploaded_books                                 user_uploaded_books[]
-
-  @@index([status])
-  @@index([member_type])
-  @@index([joined_date])
-  @@index([joined_date(sort: Desc)], map: "idx_members_joined_date")
-  @@index([member_type], map: "idx_members_member_type")
-  @@index([role], map: "idx_members_role")
-  @@index([status], map: "idx_members_status")
-  @@index([supabase_uid], map: "idx_members_supabase_uid")
-}
-
-model transactions {
-  id                                             Int       @id @default(autoincrement())
-  book_id                                        Int
-  member_id                                      Int
-  checkout_date                                  DateTime  @default(now())
-  due_date                                       DateTime
-  return_date                                    DateTime?
-  status                                         String    @default("checked_out")
-  checkout_condition                             String?   @default("good")
-  return_condition                               String?
-  fine_amount                                    Float     @default(0.0)
-  fine_paid                                      Boolean   @default(false)
-  notes                                          String?
-  issued_by_member                               Int?
-  book                                           books     @relation(fields: [book_id], references: [id])
-  members_transactions_issued_by_memberTomembers members?  @relation("transactions_issued_by_memberTomembers", fields: [issued_by_member], references: [id], onUpdate: NoAction)
-  member                                         members   @relation(fields: [member_id], references: [id])
-
-  @@index([book_id])
-  @@index([member_id])
-  @@index([status])
-  @@index([checkout_date])
-  @@index([due_date])
-  @@index([status, due_date])
-  @@index([member_id, status])
-  @@index([book_id], map: "idx_transactions_book_id")
-  @@index([checkout_date(sort: Desc)], map: "idx_transactions_checkout_date")
-  @@index([due_date], map: "idx_transactions_due_date")
-  @@index([member_id], map: "idx_transactions_member_id")
-  @@index([member_id, status], map: "idx_transactions_member_status")
-  @@index([status], map: "idx_transactions_status")
-  @@index([status, due_date], map: "idx_transactions_status_due_date")
-}
-
-model reservations {
-  id               Int       @id @default(autoincrement())
-  book_id          Int
-  member_id        Int
-  reservation_date DateTime  @default(now())
-  expiry_date      DateTime?
-  status           String    @default("pending")
-  notified         Boolean   @default(false)
-  book             books     @relation(fields: [book_id], references: [id])
-  member           members   @relation(fields: [member_id], references: [id])
-
-  @@index([status])
-  @@index([status], map: "idx_reservations_status")
-}
-
-model user_uploaded_books {
-  id          Int      @id @default(autoincrement())
-  member_id   Int
-  title       String
-  author      String?
-  file_path   String
-  file_format String?
-  file_size   Int?
-  cover_path  String?
-  uploaded_at DateTime @default(now())
-  member      members  @relation(fields: [member_id], references: [id])
-}
-
-model reading_progress {
-  id               Int      @id @default(autoincrement())
-  member_id        Int
-  book_type        String
-  book_id          String
-  current_location String?
-  progress_percent Float    @default(0)
-  last_read_at     DateTime @default(now())
-  member           members  @relation(fields: [member_id], references: [id])
-}
-
-model site_settings {
-  id         Int      @id @default(autoincrement())
-  key        String   @unique
-  value      String
-  category   String   @default("general")
-  updated_at DateTime @default(now()) @updatedAt @db.Timestamptz(6)
-
-  @@index([category], map: "idx_site_settings_category")
-}
-
-model collections {
-  id               Int                @id @default(autoincrement())
-  name             String             @unique
-  description      String?
-  cover_image      String?
-  display_order    Int                @default(0)
-  is_active        Boolean            @default(true)
-  created_at       DateTime           @default(now()) @db.Timestamptz(6)
-  updated_at       DateTime           @default(now()) @updatedAt @db.Timestamptz(6)
-  is_pinned        Boolean            @default(false)
-  collection_books collection_books[]
-
-  @@index([is_pinned], map: "idx_collections_is_pinned", where: raw("(is_pinned = true)"))
-}
-
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model collection_books {
   id            Int         @id @default(autoincrement())
   collection_id Int
   book_id       Int
   display_order Int         @default(0)
   added_at      DateTime    @default(now()) @db.Timestamptz(6)
-  book          books       @relation(fields: [book_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  collection    collections @relation(fields: [collection_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  added_by      Int?
+  staff         staff?      @relation(fields: [added_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  books         books       @relation(fields: [book_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  collections   collections @relation(fields: [collection_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@unique([collection_id, book_id])
-  @@index([collection_id], map: "idx_collection_books_collection")
+  @@index([collection_id, display_order], map: "idx_collection_books_collection")
 }
 
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model collections {
+  id               Int                @id @default(autoincrement())
+  name             String             @unique @db.VarChar(200)
+  slug             String             @unique @db.VarChar(200)
+  description      String?
+  cover_image      String?
+  display_order    Int                @default(0)
+  is_active        Boolean            @default(true)
+  is_featured      Boolean            @default(false)
+  is_pinned        Boolean            @default(false)
+  created_by       Int?
+  created_at       DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime           @default(now()) @db.Timestamptz(6)
+  collection_books collection_books[]
+  staff            staff?             @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([display_order], map: "idx_collections_display_order")
+  @@index([is_active], map: "idx_collections_is_active", where: raw("(is_active = true)"))
+  @@index([is_pinned], map: "idx_collections_is_pinned", where: raw("(is_pinned = true)"))
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model ebooks {
-  id          Int      @id @default(autoincrement())
-  book_id     Int?
-  title       String
-  author      String?
-  file_path   String
-  file_format String
-  file_size   Int?
-  cover_path  String?
-  is_public   Boolean  @default(false)
-  uploaded_by Int?
-  uploaded_at DateTime @default(now()) @db.Timestamptz(6)
-  book        books?   @relation(fields: [book_id], references: [id], onUpdate: NoAction)
+  id              Int      @id @default(autoincrement())
+  book_id         Int?
+  title           String   @db.VarChar(500)
+  author          String?  @db.VarChar(300)
+  file_path       String
+  file_format     String   @db.VarChar(20)
+  file_size_bytes BigInt?
+  cover_path      String?
+  is_public       Boolean  @default(false)
+  download_count  Int      @default(0)
+  uploaded_by     Int?
+  uploaded_at     DateTime @default(now()) @db.Timestamptz(6)
+  books           books?   @relation(fields: [book_id], references: [id], onUpdate: NoAction)
+  staff           staff?   @relation(fields: [uploaded_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([book_id], map: "idx_ebooks_book_id")
+  @@index([is_public], map: "idx_ebooks_is_public", where: raw("(is_public = true)"))
 }
 
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model library_events {
+  id                Int       @id @default(autoincrement())
+  title             String    @db.VarChar(300)
+  description       String?
+  event_date        DateTime  @db.Timestamptz(6)
+  end_date          DateTime? @db.Timestamptz(6)
+  location          String?   @db.VarChar(200)
+  event_type        String?   @db.VarChar(50)
+  max_attendees     Int?
+  current_attendees Int?      @default(0)
+  is_active         Boolean   @default(true)
+  cover_image_url   String?
+  created_by        Int?
+  created_at        DateTime  @default(now()) @db.Timestamptz(6)
+  staff             staff?    @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([is_active], map: "idx_library_events_active", where: raw("(is_active = true)"))
+  @@index([event_date], map: "idx_library_events_date")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model members {
+  id                  Int                   @id @default(autoincrement())
+  card_id             String                @unique @db.VarChar(30)
+  supabase_uid        String?               @unique @db.Uuid
+  name                String                @db.VarChar(200)
+  email               String                @unique @db.VarChar(255)
+  phone               String?               @db.VarChar(20)
+  address             String?
+  date_of_birth       DateTime?             @db.Date
+  gender              String?               @db.VarChar(20)
+  profile_image_url   String?
+  password_hash       String?               @db.VarChar(255)
+  member_type         String                @default("regular") @db.VarChar(30)
+  status              String                @default("active") @db.VarChar(20)
+  fines               Decimal               @default(0.00) @db.Decimal(10, 2)
+  max_books_allowed   Int                   @default(5)
+  loan_period_days    Int                   @default(14)
+  joined_date         DateTime              @default(now()) @db.Timestamptz(6)
+  expiry_date         DateTime?             @db.Date
+  last_visit          DateTime?             @db.Timestamptz(6)
+  notes               String?
+  is_verified         Boolean?              @default(false)
+  emergency_contact   String?               @db.VarChar(200)
+  emergency_phone     String?               @db.VarChar(20)
+  created_at          DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime              @default(now()) @db.Timestamptz(6)
+  role                String                @default("member") @db.VarChar(30)
+  reading_progress    reading_progress[]
+  reservations        reservations[]
+  transactions        transactions[]
+  user_uploaded_books user_uploaded_books[]
+
+  @@index([card_id], map: "idx_members_card_id")
+  @@index([email], map: "idx_members_email")
+  @@index([expiry_date], map: "idx_members_expiry_date")
+  @@index([joined_date(sort: Desc)], map: "idx_members_joined_date")
+  @@index([member_type], map: "idx_members_member_type")
+  @@index([name(ops: raw("gin_trgm_ops"))], map: "idx_members_name_trgm", type: Gin)
+  @@index([status], map: "idx_members_status")
+  @@index([supabase_uid], map: "idx_members_supabase_uid")
+  @@index([role], map: "idx_members_role")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model reading_progress {
+  id               Int      @id @default(autoincrement())
+  member_id        Int
+  book_type        String   @db.VarChar(20)
+  book_id          String   @db.VarChar(50)
+  current_location String?
+  progress_percent Decimal  @default(0.00) @db.Decimal(5, 2)
+  last_read_at     DateTime @default(now()) @db.Timestamptz(6)
+  members          members  @relation(fields: [member_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([member_id, book_type, book_id])
+  @@index([member_id], map: "idx_reading_progress_member")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model reservations {
+  id                Int       @id @default(autoincrement())
+  book_id           Int
+  member_id         Int
+  reservation_date  DateTime  @default(now()) @db.Timestamptz(6)
+  expiry_date       DateTime? @db.Timestamptz(6)
+  status            String    @default("pending") @db.VarChar(20)
+  notified          Boolean   @default(false)
+  notified_at       DateTime? @db.Timestamptz(6)
+  position_in_queue Int?
+  notes             String?
+  created_at        DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime  @default(now()) @db.Timestamptz(6)
+  books             books     @relation(fields: [book_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  members           members   @relation(fields: [member_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([book_id], map: "idx_reservations_book_id")
+  @@index([expiry_date], map: "idx_reservations_expiry", where: raw("((status)::text = 'pending'::text)"))
+  @@index([member_id], map: "idx_reservations_member_id")
+  @@index([status], map: "idx_reservations_status")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model site_settings {
+  id          Int      @id @default(autoincrement())
+  key         String   @unique @db.VarChar(100)
+  value       String
+  category    String   @default("general") @db.VarChar(50)
+  description String?
+  updated_at  DateTime @default(now()) @db.Timestamptz(6)
+  updated_by  Int?
+  staff       staff?   @relation(fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model staff {
+  id                Int                 @id @default(autoincrement())
+  staff_id          String              @unique @db.VarChar(30)
+  supabase_uid      String?             @unique @db.Uuid
+  name              String              @db.VarChar(200)
+  email             String              @unique @db.VarChar(255)
+  phone             String?             @db.VarChar(20)
+  password_hash     String              @db.VarChar(255)
+  role              String              @default("librarian") @db.VarChar(30)
+  department        String?             @db.VarChar(100)
+  permissions       Json?               @default("{}")
+  status            String              @default("active") @db.VarChar(20)
+  hired_date        DateTime            @default(dbgenerated("CURRENT_DATE")) @db.Date
+  last_login        DateTime?           @db.Timestamptz(6)
+  profile_image_url String?
+  created_at        DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime            @default(now()) @db.Timestamptz(6)
+  collection_books  collection_books[]
+  collections       collections[]
+  ebooks            ebooks[]
+  library_events    library_events[]
+  site_settings     site_settings[]
+  staff_board_posts staff_board_posts[]
+  transactions      transactions[]
+
+  @@index([email], map: "idx_staff_email")
+  @@index([role], map: "idx_staff_role")
+  @@index([staff_id], map: "idx_staff_staff_id")
+  @@index([status], map: "idx_staff_status")
+  @@index([supabase_uid], map: "idx_staff_supabase_uid")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model staff_board_posts {
   id         Int       @id @default(autoincrement())
-  title      String
+  title      String    @db.VarChar(300)
   content    String
-  category   String    @default("announcement")
+  category   String    @default("announcement") @db.VarChar(50)
   is_pinned  Boolean   @default(false)
+  priority   String?   @default("normal") @db.VarChar(20)
   posted_by  Int?
-  created_at DateTime  @default(now()) @db.Timestamptz(6)
   expires_at DateTime? @db.Timestamptz(6)
+  created_at DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at DateTime  @default(now()) @db.Timestamptz(6)
+  staff      staff?    @relation(fields: [posted_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([created_at(sort: Desc)], map: "idx_staff_board_created")
+  @@index([is_pinned], map: "idx_staff_board_pinned", where: raw("(is_pinned = true)"))
 }
 
-model library_events {
-  id          Int      @id @default(autoincrement())
-  title       String
-  description String?
-  event_date  DateTime @db.Timestamptz(6)
-  location    String?
-  is_active   Boolean  @default(true)
-  created_at  DateTime @default(now()) @db.Timestamptz(6)
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model transactions {
+  id                 Int       @id @default(autoincrement())
+  book_id            Int
+  member_id          Int
+  staff_id           Int?
+  checkout_date      DateTime  @default(now()) @db.Timestamptz(6)
+  due_date           DateTime  @db.Timestamptz(6)
+  return_date        DateTime? @db.Timestamptz(6)
+  status             String    @default("checked_out") @db.VarChar(20)
+  checkout_condition String?   @default("good") @db.VarChar(30)
+  return_condition   String?   @db.VarChar(30)
+  fine_amount        Decimal   @default(0.00) @db.Decimal(10, 2)
+  fine_paid          Boolean   @default(false)
+  fine_paid_date     DateTime? @db.Timestamptz(6)
+  renewal_count      Int       @default(0)
+  max_renewals       Int       @default(2)
+  notes              String?
+  created_at         DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime  @default(now()) @db.Timestamptz(6)
+  books              books     @relation(fields: [book_id], references: [id], onUpdate: NoAction)
+  members            members   @relation(fields: [member_id], references: [id], onUpdate: NoAction)
+  staff              staff?    @relation(fields: [staff_id], references: [id], onUpdate: NoAction)
+
+  @@index([book_id], map: "idx_transactions_book_id")
+  @@index([checkout_date(sort: Desc)], map: "idx_transactions_checkout_date")
+  @@index([due_date], map: "idx_transactions_due_date")
+  @@index([member_id], map: "idx_transactions_member_id")
+  @@index([member_id, status], map: "idx_transactions_member_status")
+  @@index([due_date], map: "idx_transactions_overdue", where: raw("(((status)::text = 'checked_out'::text) AND (return_date IS NULL))"))
+  @@index([staff_id], map: "idx_transactions_staff_id")
+  @@index([status], map: "idx_transactions_status")
+  @@index([status, due_date], map: "idx_transactions_status_due_date")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model user_uploaded_books {
+  id              Int      @id @default(autoincrement())
+  member_id       Int
+  title           String   @db.VarChar(500)
+  author          String?  @db.VarChar(300)
+  file_path       String
+  file_format     String?  @db.VarChar(20)
+  file_size_bytes BigInt?
+  cover_path      String?
+  uploaded_at     DateTime @default(now()) @db.Timestamptz(6)
+  members         members  @relation(fields: [member_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([member_id], map: "idx_user_uploaded_member")
 }

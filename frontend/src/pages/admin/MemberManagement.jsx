@@ -9,7 +9,9 @@ export default function MemberManagement() {
     const [editingMember, setEditingMember] = useState(null);
     const [loading, setLoading] = useState(true);
     const [formData, setFormData] = useState({
-        name: '', email: '', phone: '', address: '', member_type: 'regular', status: 'active'
+        name: '', email: '', phone: '', address: '', member_type: 'public', status: 'active',
+        date_of_birth: '', gender: '', role: 'member', max_books_allowed: 5, loan_period_days: 14,
+        emergency_contact: '', emergency_phone: '', notes: ''
     });
 
     useEffect(() => { loadMembers(); }, []);
@@ -52,7 +54,9 @@ export default function MemberManagement() {
 
     const openAddModal = () => {
         setEditingMember(null);
-        setFormData({ name: '', email: '', phone: '', address: '', member_type: 'regular', status: 'active' });
+        setFormData({ name: '', email: '', phone: '', address: '', member_type: 'public', status: 'active',
+            date_of_birth: '', gender: '', role: 'member', max_books_allowed: 5, loan_period_days: 14,
+            emergency_contact: '', emergency_phone: '', notes: '' });
         setShowModal(true);
     };
 
@@ -63,8 +67,16 @@ export default function MemberManagement() {
             email: member.email || '',
             phone: member.phone || '',
             address: member.address || '',
-            member_type: member.member_type || 'regular',
-            status: member.status || 'active'
+            member_type: member.member_type || 'public',
+            status: member.status || 'active',
+            date_of_birth: member.date_of_birth ? member.date_of_birth.split('T')[0] : '',
+            gender: member.gender || '',
+            role: member.role || 'member',
+            max_books_allowed: member.max_books_allowed || 5,
+            loan_period_days: member.loan_period_days || 14,
+            emergency_contact: member.emergency_contact || '',
+            emergency_phone: member.emergency_phone || '',
+            notes: member.notes || ''
         });
         setShowModal(true);
     };
@@ -126,10 +138,10 @@ export default function MemberManagement() {
                 </div>
                 <select value={filter} onChange={(e) => setFilter(e.target.value)} className="px-4 py-2 border border-[#E8E4DF] bg-white text-sm focus:border-[#c16549] focus:outline-none">
                     <option value="all">All Types</option>
-                    <option value="regular">Regular</option>
+                    <option value="public">Public</option>
                     <option value="student">Student</option>
-                    <option value="staff">Staff</option>
-                    <option value="admin">Admin</option>
+                    <option value="faculty">Faculty</option>
+                    <option value="researcher">Researcher</option>
                 </select>
             </div>
 
@@ -149,11 +161,17 @@ export default function MemberManagement() {
                                 <div className="flex-1 min-w-0">
                                     <h3 className="font-medium text-sm text-[#1E1815] truncate">{member.name}</h3>
                                     <p className="text-xs text-[#6B6560] truncate">{member.email}</p>
-                                    <div className="flex items-center gap-2 mt-2">
+                                    <div className="flex items-center gap-2 mt-2 flex-wrap">
                                         <span className={`px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
                                             member.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
                                         }`}>{member.status}</span>
                                         <span className="px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-[#FAF7F2] text-[#6B6560]">{member.member_type}</span>
+                                        {member.role && member.role !== 'member' && (
+                                            <span className="px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-blue-100 text-blue-700">{member.role}</span>
+                                        )}
+                                        {parseFloat(member.fines) > 0 && (
+                                            <span className="px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-red-100 text-red-700">${member.fines} fine</span>
+                                        )}
                                     </div>
                                 </div>
                                 <div className="flex flex-col gap-1">
@@ -173,7 +191,7 @@ export default function MemberManagement() {
             {/* Modal */}
             {showModal && (
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                    <div className="bg-white w-full max-w-lg max-h-[90vh] overflow-y-auto">
+                    <div className="bg-white w-full max-w-2xl max-h-[90vh] overflow-y-auto">
                         <div className="p-4 border-b border-[#E8E4DF] flex items-center justify-between">
                             <h2 className="text-lg font-bold text-[#1E1815]">{editingMember ? 'Edit Member' : 'Add Member'}</h2>
                             <button onClick={closeModal} className="p-1 hover:bg-[#FAF7F2] rounded">
@@ -181,32 +199,60 @@ export default function MemberManagement() {
                             </button>
                         </div>
                         <form onSubmit={handleSubmit} className="p-4 space-y-4">
-                            <div>
-                                <label className="block text-xs font-semibold text-[#6B6560] uppercase tracking-wide mb-1">Name *</label>
-                                <input required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none" />
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-semibold text-[#6B6560] uppercase tracking-wide mb-1">Name *</label>
+                                    <input required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-[#6B6560] uppercase tracking-wide mb-1">Email *</label>
+                                    <input required type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none" />
+                                </div>
                             </div>
-                            <div>
-                                <label className="block text-xs font-semibold text-[#6B6560] uppercase tracking-wide mb-1">Email *</label>
-                                <input required type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none" />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-semibold text-[#6B6560] uppercase tracking-wide mb-1">Phone</label>
-                                <input value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none" />
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-semibold text-[#6B6560] uppercase tracking-wide mb-1">Phone</label>
+                                    <input value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-[#6B6560] uppercase tracking-wide mb-1">Date of Birth</label>
+                                    <input type="date" value={formData.date_of_birth} onChange={e => setFormData({...formData, date_of_birth: e.target.value})} className="w-full px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none" />
+                                </div>
                             </div>
                             <div>
                                 <label className="block text-xs font-semibold text-[#6B6560] uppercase tracking-wide mb-1">Address</label>
                                 <textarea rows="2" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} className="w-full px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none resize-none" />
                             </div>
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-3 gap-4">
                                 <div>
-                                    <label className="block text-xs font-semibold text-[#6B6560] uppercase tracking-wide mb-1">Type</label>
+                                    <label className="block text-xs font-semibold text-[#6B6560] uppercase tracking-wide mb-1">Gender</label>
+                                    <select value={formData.gender} onChange={e => setFormData({...formData, gender: e.target.value})} className="w-full px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none">
+                                        <option value="">Select</option>
+                                        <option value="male">Male</option>
+                                        <option value="female">Female</option>
+                                        <option value="other">Other</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-[#6B6560] uppercase tracking-wide mb-1">Member Type</label>
                                     <select value={formData.member_type} onChange={e => setFormData({...formData, member_type: e.target.value})} className="w-full px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none">
-                                        <option value="regular">Regular</option>
+                                        <option value="public">Public</option>
                                         <option value="student">Student</option>
+                                        <option value="faculty">Faculty</option>
+                                        <option value="researcher">Researcher</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-[#6B6560] uppercase tracking-wide mb-1">Role</label>
+                                    <select value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})} className="w-full px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none">
+                                        <option value="member">Member</option>
                                         <option value="staff">Staff</option>
+                                        <option value="librarian">Librarian</option>
                                         <option value="admin">Admin</option>
                                     </select>
                                 </div>
+                            </div>
+                            <div className="grid grid-cols-3 gap-4">
                                 <div>
                                     <label className="block text-xs font-semibold text-[#6B6560] uppercase tracking-wide mb-1">Status</label>
                                     <select value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})} className="w-full px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none">
@@ -215,6 +261,28 @@ export default function MemberManagement() {
                                         <option value="suspended">Suspended</option>
                                     </select>
                                 </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-[#6B6560] uppercase tracking-wide mb-1">Max Books</label>
+                                    <input type="number" min="1" max="50" value={formData.max_books_allowed} onChange={e => setFormData({...formData, max_books_allowed: parseInt(e.target.value) || 5})} className="w-full px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-[#6B6560] uppercase tracking-wide mb-1">Loan Days</label>
+                                    <input type="number" min="1" max="90" value={formData.loan_period_days} onChange={e => setFormData({...formData, loan_period_days: parseInt(e.target.value) || 14})} className="w-full px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none" />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-semibold text-[#6B6560] uppercase tracking-wide mb-1">Emergency Contact</label>
+                                    <input value={formData.emergency_contact} onChange={e => setFormData({...formData, emergency_contact: e.target.value})} className="w-full px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-[#6B6560] uppercase tracking-wide mb-1">Emergency Phone</label>
+                                    <input value={formData.emergency_phone} onChange={e => setFormData({...formData, emergency_phone: e.target.value})} className="w-full px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none" />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-semibold text-[#6B6560] uppercase tracking-wide mb-1">Notes</label>
+                                <textarea rows="2" value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} className="w-full px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none resize-none" />
                             </div>
                             <div className="flex gap-3 pt-2">
                                 <button type="button" onClick={closeModal} className="flex-1 px-4 py-2 border border-[#E8E4DF] text-sm font-medium hover:bg-[#FAF7F2] transition-colors">Cancel</button>

@@ -43,8 +43,7 @@ export const authenticateToken = (req, res, next) => {
 };
 
 // ─── Resolve the member from the database ────────────────────
-// Since staff table is removed, all users (including admins) are in the members table.
-// Admin/staff distinction is via members.role = 'admin' | 'staff' | 'member'
+// All users (including admins) are in the members table with role column
 
 const resolveMember = async (req) => {
     // 1. Try Supabase UID (fastest for logged-in Supabase users)
@@ -84,7 +83,7 @@ const resolveMember = async (req) => {
 export const requireStaff = async (req, res, next) => {
     try {
         const member = await resolveMember(req);
-        if (!member || !['admin', 'staff'].includes(member.role)) {
+        if (!member || !['admin', 'staff', 'librarian'].includes(member.role)) {
             return res.status(403).json({ detail: 'Staff access required' });
         }
         req.actor = member;
@@ -103,7 +102,7 @@ export const requireAdmin = async (req, res, next) => {
     try {
         const member = await resolveMember(req);
         if (!member || member.role !== 'admin') {
-            return res.status(403).json({ detail: 'Admin access required' });
+            return res.status(403).json({ detail: 'Access denied. Admin credentials required.' });
         }
         req.actor = member;
         req.staff = member; // legacy compat

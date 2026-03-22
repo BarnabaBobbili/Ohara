@@ -38,6 +38,7 @@ export default function LiveBookshelf() {
     const navigate = useNavigate();
 
     useEffect(() => {
+        // Fetch bookshelf section CMS content
         cmsAPI.getSection('home', 'bookshelf')
             .then((data) => {
                 if (data) {
@@ -46,16 +47,43 @@ export default function LiveBookshelf() {
             })
             .catch(() => {});
 
-        recommendationsAPI.getPopular(9)
+        // Fetch shelf books from CMS (shelfBooks)
+        cmsAPI.getSection('home', 'content')
             .then((data) => {
-                if (Array.isArray(data) && data.length) {
+                if (data?.shelfBooks && Array.isArray(data.shelfBooks) && data.shelfBooks.length > 0) {
+                    // Use CMS-configured shelf books (up to 9)
+                    const cmsBooks = data.shelfBooks.slice(0, 9);
                     setBooks(DEFAULT_BOOKS.map((fallbackBook, index) => ({
                         ...fallbackBook,
-                        ...(data[index] || {}),
+                        ...(cmsBooks[index] || {}),
                     })));
+                } else {
+                    // Fallback to popular books if no CMS books configured
+                    recommendationsAPI.getPopular(9)
+                        .then((popularBooks) => {
+                            if (Array.isArray(popularBooks) && popularBooks.length) {
+                                setBooks(DEFAULT_BOOKS.map((fallbackBook, index) => ({
+                                    ...fallbackBook,
+                                    ...(popularBooks[index] || {}),
+                                })));
+                            }
+                        })
+                        .catch(() => {});
                 }
             })
-            .catch(() => {});
+            .catch(() => {
+                // Fallback to popular books on error
+                recommendationsAPI.getPopular(9)
+                    .then((popularBooks) => {
+                        if (Array.isArray(popularBooks) && popularBooks.length) {
+                            setBooks(DEFAULT_BOOKS.map((fallbackBook, index) => ({
+                                ...fallbackBook,
+                                ...(popularBooks[index] || {}),
+                            })));
+                        }
+                    })
+                    .catch(() => {});
+            });
     }, []);
 
     const handleBookClick = (book) => {

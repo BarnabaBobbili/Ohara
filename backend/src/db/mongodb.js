@@ -8,23 +8,41 @@ let db = null;
 
 // ─── Index Definitions ──────────────────────────────────────
 
+const safeCreateIndex = async (collection, keys, options) => {
+    try {
+        await collection.createIndex(keys, options);
+    } catch (error) {
+        // If index already exists with same keys but different name, that's fine
+        if (error.code === 85 || error.code === 86) {
+            // 85: IndexOptionsConflict, 86: IndexKeySpecsConflict
+            // Index exists with different options/name - skip silently
+            return;
+        }
+        throw error;
+    }
+};
+
 const ensureMongoIndexes = async (database) => {
-    // Activity logs — already existed
-    const activityLogs = database.collection('activity_logs');
-    await activityLogs.createIndex({ timestamp: -1 }, { name: 'idx_activity_timestamp_desc' });
-    await activityLogs.createIndex({ action: 1, timestamp: -1 }, { name: 'idx_activity_action_ts' });
+    try {
+        // Activity logs
+        const activityLogs = database.collection('activity_logs');
+        await safeCreateIndex(activityLogs, { timestamp: -1 }, { name: 'idx_timestamp_desc', background: true });
+        await safeCreateIndex(activityLogs, { action: 1, timestamp: -1 }, { name: 'idx_action_timestamp', background: true });
+        await safeCreateIndex(activityLogs, { entity_type: 1, entity_id: 1 }, { name: 'idx_entity', background: true });
 
-    // CMS pages — unique compound index per page+section
-    const cmsPages = database.collection('cms_pages');
-    await cmsPages.createIndex(
-        { page: 1, section: 1 },
-        { unique: true, name: 'idx_cms_page_section' }
-    );
+        // CMS pages — unique compound index per page+section
+        const cmsPages = database.collection('cms_pages');
+        await safeCreateIndex(cmsPages, { page: 1, section: 1 }, { unique: true, name: 'idx_page_section', background: true });
 
-    // Analytics
-    const analytics = database.collection('analytics');
-    await analytics.createIndex({ type: 1, timestamp: -1 }, { name: 'idx_analytics_type_ts' });
-    await analytics.createIndex({ timestamp: -1 }, { name: 'idx_analytics_ts' });
+        // Analytics
+        const analytics = database.collection('analytics');
+        await safeCreateIndex(analytics, { type: 1, timestamp: -1 }, { name: 'idx_type_timestamp', background: true });
+        await safeCreateIndex(analytics, { timestamp: -1 }, { name: 'idx_analytics_timestamp', background: true });
+        
+        console.log('✓ MongoDB indexes verified');
+    } catch (error) {
+        console.warn('MongoDB index creation warning:', error.message);
+    }
 };
 
 // ─── Default CMS Content ────────────────────────────────────

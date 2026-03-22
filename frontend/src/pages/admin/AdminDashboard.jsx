@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { reportsAPI, staffBoardAPI } from '../../services/api';
+import { dashboardAPI, reportsAPI } from '../../services/api';
+import { formatIST } from '../../utils/dateFormat';
 
 export default function AdminDashboard() {
     const [stats, setStats] = useState({ books: 0, members: 0, checkouts: 0, overdue: 0 });
@@ -13,16 +14,16 @@ export default function AdminDashboard() {
     const loadData = async () => {
         try {
             const [statsData, activityData] = await Promise.all([
-                reportsAPI.getStats().catch(() => ({})),
-                staffBoardAPI.getPosts().catch(() => [])
+                dashboardAPI.getStats().catch(() => ({})),
+                reportsAPI.getActivityLogs({ limit: 10 }).catch(() => ({ logs: [] }))
             ]);
             setStats({
-                books: statsData?.collection?.total_books || 0,
-                members: statsData?.membership?.total || 0,
-                checkouts: statsData?.circulation?.checkouts || 0,
-                overdue: statsData?.circulation?.overdue || 0
+                books: statsData?.total_books || 0,
+                members: statsData?.total_members || 0,
+                checkouts: statsData?.books_checked_out || 0,
+                overdue: statsData?.books_overdue || 0
             });
-            setActivities(Array.isArray(activityData) ? activityData.slice(0, 5) : []);
+            setActivities(Array.isArray(activityData?.logs) ? activityData.logs.slice(0, 5) : []);
         } catch (error) {
             console.error('Failed to load dashboard:', error);
         } finally {
@@ -79,17 +80,41 @@ export default function AdminDashboard() {
                         <p className="text-sm text-[#6B6560]">No recent activity</p>
                     ) : (
                         <div className="space-y-3">
-                            {activities.map((activity, i) => (
-                                <div key={i} className="flex items-start gap-3 pb-3 border-b border-[#E8E4DF] last:border-0">
-                                    <div className="w-8 h-8 bg-[#FAF7F2] rounded-full flex items-center justify-center">
-                                        <span className="material-symbols-outlined text-sm text-[#c16549]">schedule</span>
+                            {activities.map((activity, i) => {
+                                const action = activity.action?.toLowerCase() || '';
+                                const icon = action.includes('create') || action.includes('add') ? 'add_circle' :
+                                             action.includes('delete') || action.includes('remove') ? 'delete' :
+                                             action.includes('update') || action.includes('edit') ? 'edit' :
+                                             action.includes('checkout') ? 'output' :
+                                             action.includes('return') ? 'input' : 'schedule';
+                                const actionLabel = activity.action?.replace(/_/g, ' ').toUpperCase() || 'ACTIVITY';
+                                
+                                return (
+                                    <div key={i} className="flex items-start gap-3 pb-3 border-b border-[#E8E4DF] last:border-0">
+                                        <div className="w-8 h-8 bg-[#FAF7F2] rounded-full flex items-center justify-center">
+                                            <span className="material-symbols-outlined text-sm text-[#c16549]">{icon}</span>
+                                        </div>
+                                        <div className="flex-1">
+                                            <p className="text-sm text-[#1E1815]">
+                                                <span className="font-medium">{actionLabel}</span>
+                                                {' — '}
+                                                <span className="text-[#6B6560]">{activity.book_title}</span>
+                                                {activity.book_author && <span className="text-[#6B6560]"> by {activity.book_author}</span>}
+                                            </p>
+                                            <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                                {activity.fields_changed?.length > 0 && (
+                                                    <span className="text-xs text-[#c16549]">
+                                                        Changed: {activity.fields_changed.join(', ')}
+                                                    </span>
+                                                )}
+                                                <span className="text-xs text-[#6B6560]">
+                                                    {formatIST(activity.timestamp)}
+                                                </span>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <p className="text-sm text-[#1E1815]">{activity.content || activity.title}</p>
-                                        <p className="text-xs text-[#6B6560]">{new Date(activity.created_at).toLocaleString()}</p>
-                                    </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     )}
                 </div>

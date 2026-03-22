@@ -55,6 +55,7 @@ export default function HeroSection() {
     const navigate = useNavigate();
 
     useEffect(() => {
+        // Fetch hero section CMS content
         cmsAPI.getSection('home', 'hero')
             .then((data) => {
                 if (data) {
@@ -63,17 +64,46 @@ export default function HeroSection() {
             })
             .catch(() => {});
 
-        recommendationsAPI.getPopular(3)
-            .then((books) => {
-                if (Array.isArray(books) && books.length) {
+        // Fetch featured books from CMS (heroBooks)
+        cmsAPI.getSection('home', 'content')
+            .then((data) => {
+                if (data?.heroBooks && Array.isArray(data.heroBooks) && data.heroBooks.length > 0) {
+                    // Use CMS-configured hero books (up to 3)
+                    const cmsBooks = data.heroBooks.slice(0, 3);
                     setFeaturedBooks([
-                        { ...DEFAULT_BOOKS[0], ...books[0] },
-                        { ...DEFAULT_BOOKS[1], ...books[1] },
-                        { ...DEFAULT_BOOKS[2], ...books[2] },
+                        { ...DEFAULT_BOOKS[0], ...cmsBooks[0] },
+                        cmsBooks[1] ? { ...DEFAULT_BOOKS[1], ...cmsBooks[1] } : DEFAULT_BOOKS[1],
+                        cmsBooks[2] ? { ...DEFAULT_BOOKS[2], ...cmsBooks[2] } : DEFAULT_BOOKS[2],
                     ]);
+                } else {
+                    // Fallback to popular books if no CMS books configured
+                    recommendationsAPI.getPopular(3)
+                        .then((books) => {
+                            if (Array.isArray(books) && books.length) {
+                                setFeaturedBooks([
+                                    { ...DEFAULT_BOOKS[0], ...books[0] },
+                                    { ...DEFAULT_BOOKS[1], ...books[1] },
+                                    { ...DEFAULT_BOOKS[2], ...books[2] },
+                                ]);
+                            }
+                        })
+                        .catch(() => {});
                 }
             })
-            .catch(() => {});
+            .catch(() => {
+                // Fallback to popular books on error
+                recommendationsAPI.getPopular(3)
+                    .then((books) => {
+                        if (Array.isArray(books) && books.length) {
+                            setFeaturedBooks([
+                                { ...DEFAULT_BOOKS[0], ...books[0] },
+                                { ...DEFAULT_BOOKS[1], ...books[1] },
+                                { ...DEFAULT_BOOKS[2], ...books[2] },
+                            ]);
+                        }
+                    })
+                    .catch(() => {});
+            });
     }, []);
 
     const handleSearch = (e) => {
