@@ -6,11 +6,16 @@ import MembershipCTA from '../components/landing/MembershipCTA';
 import Footer from '../components/landing/Footer';
 import ScrollIndicator from '../components/ScrollIndicator';
 import Header from '../components/Header';
+import AnnouncementBanner from '../components/landing/AnnouncementBanner';
+import LibraryNewsSection from '../components/landing/LibraryNewsSection';
 
 export default function Home() {
     return (
         <div className="min-h-screen bg-white">
-            {/* Global Header - Transparent on hero, solid on scroll */}
+            {/* Announcement Banner - Slim bar at very top, above navbar */}
+            <AnnouncementBanner />
+
+            {/* Global Header - Below announcement banner */}
             <Header />
 
             {/* Dynamic scroll indicator */}
@@ -24,6 +29,9 @@ export default function Home() {
             </div>
             <div id="bookshelf">
                 <LiveBookshelf />
+            </div>
+            <div id="news">
+                <LibraryNewsSection />
             </div>
             <div id="philosophy">
                 <PhilosophySection />

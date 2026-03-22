@@ -28,6 +28,8 @@ import recommendationsRouter from './routes/recommendations.js';
 import financialRouter from './routes/financial.js';
 import staffBoardRouter from './routes/staff_board.js';
 import ebooksRouter from './routes/ebooks.js';
+import announcementsRouter from './routes/announcements.js';
+import newsRouter from './routes/news.js';
 
 dotenv.config();
 
@@ -109,6 +111,8 @@ app.use('/api/recommendations', recommendationsRouter);
 app.use('/api/financial', financialRouter);
 app.use('/api/staff-board', staffBoardRouter);
 app.use('/api/ebooks', ebooksRouter);
+app.use('/api/announcements', announcementsRouter);
+app.use('/api/news', newsRouter);
 
 app.use((err, req, res, next) => {
     console.error('Error:', err);

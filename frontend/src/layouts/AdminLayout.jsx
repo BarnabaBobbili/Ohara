@@ -36,6 +36,7 @@ export default function AdminLayout() {
         { path: '/admin/circulation', icon: 'sync_alt', label: 'Circulation' },
         { path: '/admin/members', icon: 'groups', label: 'Patrons' },
         { path: '/admin/cms', icon: 'edit_note', label: 'CMS Studio' },
+        { path: '/admin/content', icon: 'campaign', label: 'News & Alerts' },
         { path: '/admin/ebooks', icon: 'menu_book', label: 'Digital Library' },
         { path: '/admin/reports', icon: 'analytics', label: 'Analytics' },
         { path: '/admin/audit-trail', icon: 'history', label: 'Audit Trail' },
@@ -194,7 +195,7 @@ export default function AdminLayout() {
                     onClick={() => isMobileMenuOpen && setIsMobileMenuOpen(false)}
                 >
                     {/* Top Bar */}
-                    <header className="relative z-20 bg-white border-b border-[#E8E4DF] px-6 py-4 shadow-sm">
+                    <header className="sticky top-0 z-40 bg-white border-b border-[#E8E4DF] px-6 py-4 shadow-sm">
                         <div className="flex items-center justify-between">
                             {/* Breadcrumb & Title */}
                             <div className="flex items-center gap-4">
@@ -226,15 +227,6 @@ export default function AdminLayout() {
                                     <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#c16549] rounded-full animate-pulse"></span>
                                 </button>
 
-                                {/* Quick Add */}
-                                <button 
-                                    onClick={() => navigate('/admin/books')}
-                                    className="hidden md:flex items-center gap-2 px-4 py-2 bg-[#c16549] text-white rounded-lg hover:bg-[#a14d39] transition-colors shadow-sm"
-                                >
-                                    <span className="material-symbols-outlined text-[18px]">add</span>
-                                    <span className="text-sm font-medium" style={{ fontFamily: "'Noto Sans', sans-serif" }}>Add Book</span>
-                                </button>
-
                                 {/* Home */}
                                 <button 
                                     onClick={() => navigate('/')}
@@ -246,7 +238,7 @@ export default function AdminLayout() {
                         </div>
                     </header>
 
-                    <div className="relative z-10 flex-1 overflow-auto">
+                    <div className="flex-1 overflow-auto">
                         <Outlet />
                     </div>
                 </main>

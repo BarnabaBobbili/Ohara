@@ -238,8 +238,8 @@ export default function EbookManager() {
 
             {/* Modal */}
             {showModal && (
-                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                    <div className="bg-white w-full max-w-lg max-h-[90vh] overflow-y-auto">
+                <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4">
+                    <div className="bg-white w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-lg shadow-2xl">
                         <div className="p-4 border-b border-[#E8E4DF] flex items-center justify-between">
                             <h2 className="text-lg font-bold text-[#1E1815]">{editingEbook ? 'Edit E-Book' : 'Add E-Book'}</h2>
                             <button onClick={closeModal} className="p-1 hover:bg-[#FAF7F2] rounded">

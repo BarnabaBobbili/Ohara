@@ -237,7 +237,7 @@ export default function HeroSection() {
                                         <img 
                                             src={featuredBooks[0].cover_image_url} 
                                             alt={featuredBooks[0]?.title}
-                                            className="absolute inset-0 w-full h-full object-cover"
+                                            className="absolute inset-0 w-full h-full object-cover object-center"
                                         />
                                     ) : (
                                         <>
@@ -260,7 +260,7 @@ export default function HeroSection() {
                                         <img 
                                             src={featuredBooks[1].cover_image_url} 
                                             alt={featuredBooks[1]?.title}
-                                            className="absolute inset-0 w-full h-full object-cover"
+                                            className="absolute inset-0 w-full h-full object-cover object-center"
                                         />
                                     ) : (
                                         <>
@@ -283,7 +283,7 @@ export default function HeroSection() {
                                         <img 
                                             src={featuredBooks[2].cover_image_url} 
                                             alt={featuredBooks[2]?.title}
-                                            className="absolute inset-0 w-full h-full object-cover"
+                                            className="absolute inset-0 w-full h-full object-cover object-center"
                                         />
                                     ) : (
                                         <>

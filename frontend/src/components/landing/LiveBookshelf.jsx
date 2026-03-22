@@ -114,6 +114,9 @@ export default function LiveBookshelf() {
                 <div className="layout-container flex h-full grow flex-col px-6 lg:px-40 py-12 lg:py-20 relative">
                     {/* Header Section */}
                     <section className="flex flex-col items-center justify-center px-4 py-16 md:py-24 text-center max-w-4xl mx-auto">
+                        <p className="text-[#c16549] text-sm font-medium tracking-widest uppercase mb-4">
+                            02 — Discovery
+                        </p>
                         <h1 className="text-[#171312] dark:text-white tracking-tight text-4xl md:text-6xl font-black leading-[1.1] mb-6">
                             {content.headline}
                         </h1>

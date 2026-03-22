@@ -158,7 +158,7 @@ export default function BookCatalog() {
                                             <img
                                                 src={book.cover_image_url}
                                                 alt={book.title}
-                                                className="h-full w-full object-cover"
+                                                className="h-full w-full object-cover object-center"
                                             />
                                         ) : (
                                             <FaBook className="text-gray-400 text-6xl" />

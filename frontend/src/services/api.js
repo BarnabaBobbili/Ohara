@@ -284,6 +284,47 @@ export const authAPI = {
     },
 };
 
+// ============= Announcements API (MongoDB) =============
+
+export const announcementsAPI = {
+    getAll: () => fetchAPI('/announcements'),
+    getAllAdmin: () => fetchAPI('/announcements/admin/all', { headers: getAdminAuthHeaders() }),
+    getById: (id) => fetchAPI(`/announcements/${id}`),
+    create: (data) => fetchAPI('/announcements', {
+        method: 'POST', body: JSON.stringify(data),
+        headers: getAdminAuthHeaders(),
+    }),
+    update: (id, data) => fetchAPI(`/announcements/${id}`, {
+        method: 'PUT', body: JSON.stringify(data),
+        headers: getAdminAuthHeaders(),
+    }),
+    remove: (id) => fetchAPI(`/announcements/${id}`, {
+        method: 'DELETE',
+        headers: getAdminAuthHeaders(),
+    }),
+};
+
+// ============= News API (MySQL) =============
+
+export const newsAPI = {
+    getAll: () => fetchAPI('/news'),
+    getFeatured: () => fetchAPI('/news/featured'),
+    getAllAdmin: () => fetchAPI('/news/admin/all', { headers: getAdminAuthHeaders() }),
+    getById: (id) => fetchAPI(`/news/${id}`),
+    create: (data) => fetchAPI('/news', {
+        method: 'POST', body: JSON.stringify(data),
+        headers: getAdminAuthHeaders(),
+    }),
+    update: (id, data) => fetchAPI(`/news/${id}`, {
+        method: 'PUT', body: JSON.stringify(data),
+        headers: getAdminAuthHeaders(),
+    }),
+    remove: (id) => fetchAPI(`/news/${id}`, {
+        method: 'DELETE',
+        headers: getAdminAuthHeaders(),
+    }),
+};
+
 export default {
     books:           booksAPI,
     members:         membersAPI,
@@ -300,4 +341,6 @@ export default {
     ebooks:          ebooksAPI,
     health:          healthAPI,
     auth:            authAPI,
+    announcements:   announcementsAPI,
+    news:            newsAPI,
 };

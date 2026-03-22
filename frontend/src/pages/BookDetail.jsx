@@ -77,7 +77,7 @@ export default function BookDetail() {
                                     <img
                                         src={book.cover_image_url}
                                         alt={book.title}
-                                        className="w-full h-full object-cover"
+                                        className="w-full h-full object-cover object-center"
                                     />
                                 ) : (
                                     <div className="w-full h-full bg-gradient-to-br from-slate-300 to-slate-400 flex items-center justify-center">

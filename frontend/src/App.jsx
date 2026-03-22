@@ -23,6 +23,7 @@ import Settings from './pages/admin/Settings';
 import AuditTrail from './pages/admin/AuditTrail';
 import CMSManager from './pages/admin/CMSManager';
 import EbookManager from './pages/admin/EbookManager';
+import ContentManager from './pages/admin/ContentManager';
 
 import './index.css';
 
@@ -55,6 +56,7 @@ function App() {
           <Route path="reports" element={<Reports />} />
           <Route path="cms" element={<CMSManager />} />
           <Route path="ebooks" element={<EbookManager />} />
+          <Route path="content" element={<ContentManager />} />
           <Route path="settings" element={<Settings />} />
         </Route>
       </Routes>

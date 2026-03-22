@@ -48,7 +48,7 @@ function CollectionCard({ collection, stackColors, onOpen }) {
                             <img
                                 src={coverUrl}
                                 alt={collection.name}
-                                className="w-full h-full object-cover"
+                                className="w-full h-full object-cover object-center"
                             />
                             <div className="absolute inset-0 bg-black/10 group-hover:bg-transparent transition-colors duration-300" />
                         </>
@@ -134,9 +134,9 @@ export default function CollectionsSection() {
                     {/* Header */}
                     <div className="px-6 md:px-20 lg:px-40 flex flex-col items-center pt-16 pb-10">
                         <div className="layout-content-container flex flex-col max-w-[960px] w-full text-center">
-                            <div className="flex items-center justify-center gap-2 mb-2">
-                                <span className="material-symbols-outlined text-[#d42511] text-2xl">auto_stories</span>
-                            </div>
+                            <p className="text-[#c16549] text-sm font-medium tracking-widest uppercase mb-4">
+                                01 — Collections
+                            </p>
                             <h2 className="text-4xl md:text-5xl font-bold leading-tight tracking-tight text-[#181211] dark:text-white">
                                 Curated Shelves
                             </h2>

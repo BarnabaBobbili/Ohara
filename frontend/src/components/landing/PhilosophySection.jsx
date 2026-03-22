@@ -63,22 +63,14 @@ export default function PhilosophySection() {
                             <div className="w-full lg:w-[55%] flex flex-col pr-0 lg:pr-20">
                                 {/* Meta Label */}
                                 <div className="fade-in-up" style={{ animationDelay: '0.1s' }}>
-                                    <p className="text-[#89332a]/80 dark:text-[#89332a]/70 text-sm font-medium tracking-widest uppercase mb-6 border-l-2 border-[#89332a] pl-4">
+                                    <p className="text-[#c16549] text-sm font-medium tracking-widest uppercase mb-6">
                                         {content.label}
                                     </p>
                                 </div>
 
                                 {/* Headline */}
                                 <div className="fade-in-up" style={{ animationDelay: '0.2s' }}>
-                                    <h3 className="text-[#1E1815] dark:text-white text-4xl lg:text-[48px] font-serif font-bold leading-tight mb-4 tracking-tight">
-                                        {content.headline}
-                                    </h3>
-                                </div>
-
-                                {/* Sub-headline */}
-                                <div className="fade-in-up" style={{ animationDelay: '0.3s' }}>
-                                    <h3 className="text-3xl md:text-4xl font-bold mb-6 text-[#1E1815] dark:text-white"
-                                        style={{ fontFamily: "'Newsreader', serif" }}>
+                                    <h3 className="text-[#1E1815] dark:text-white text-4xl lg:text-[48px] font-serif font-bold leading-tight mb-8 tracking-tight">
                                         {content.headline}
                                     </h3>
                                 </div>

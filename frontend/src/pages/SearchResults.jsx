@@ -250,7 +250,7 @@ export default function SearchResults() {
                                                     >
                                                         <div className="absolute left-0 top-0 bottom-0 w-3 bg-gradient-to-r from-black/20 to-transparent z-20 pointer-events-none"></div>
                                                         {book.cover_image_url ? (
-                                                            <img src={book.cover_image_url} alt={book.title} className="w-full h-full object-cover" />
+                                                            <img src={book.cover_image_url} alt={book.title} className="w-full h-full object-cover object-center" />
                                                         ) : (
                                                             <div className="w-full h-full bg-gradient-to-br from-blue-200 to-blue-300 flex items-center justify-center">
                                                                 <span className="material-symbols-outlined text-6xl text-gray-400">book</span>

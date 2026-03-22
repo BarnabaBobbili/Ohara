@@ -844,8 +844,8 @@ export default function CMSManager() {
 
             {/* Collection Modal */}
             {showCollectionModal && (
-                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                    <div className="bg-white w-full max-w-md">
+                <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4">
+                    <div className="bg-white w-full max-w-md rounded-lg shadow-2xl">
                         <div className="p-4 border-b border-[#E8E4DF] flex items-center justify-between">
                             <h2 className="text-lg font-bold text-[#1E1815]">{editingCollection ? 'Edit Collection' : 'New Collection'}</h2>
                             <button onClick={() => { setShowCollectionModal(false); setEditingCollection(null); }} className="p-1 hover:bg-[#FAF7F2] rounded">

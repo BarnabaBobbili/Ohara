@@ -117,7 +117,7 @@ export default function CollectionsPage() {
                                                     <img
                                                         src={book.cover_image_url}
                                                         alt={book.title}
-                                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                                        className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-300"
                                                     />
                                                 ) : (
                                                     <div className="w-full h-full flex flex-col items-center justify-center p-3 bg-gradient-to-br from-[#2c3e50] to-[#4a1c1c]">
