@@ -108,6 +108,7 @@ export const circulationAPI = {
         return fetchAPI(`/circulation/my-history?${queryParams}`, { headers: getMemberAuthHeaders() });
     },
     getOverdue:            () => fetchAPI('/circulation/overdue', { headers: getAdminAuthHeaders() }),
+    getRecentReturns: (limit = 12) => fetchAPI(`/circulation/recent-returns?limit=${limit}`, { headers: getAdminAuthHeaders() }),
     getMemberTransactions: (memberId) => fetchAPI(`/circulation/member/${memberId}`, { headers: getAdminAuthHeaders() }),
 };
 
@@ -164,15 +165,42 @@ export const cmsAPI = {
 
 export const settingsAPI = {
     getAll:        ()           => fetchAPI('/settings'),
+    getFull:       ()           => fetchAPI('/settings/full', { headers: getAdminAuthHeaders() }),
     getByCategory: (category)  => fetchAPI(`/settings/by-category/${category}`),
-    update: (key, value, category) => fetchAPI(`/settings/${key}`, {
-        method: 'PUT', body: JSON.stringify({ value, category }),
+    update: (key, value, category, description) => fetchAPI(`/settings/${key}`, {
+        method: 'PUT', body: JSON.stringify({ value, category, description }),
         headers: getAdminAuthHeaders(),
     }),
     bulkUpdate: (settings) => fetchAPI('/settings/bulk', {
         method: 'POST', body: JSON.stringify({ settings }),
         headers: getAdminAuthHeaders(),
     }),
+    remove: (key) => fetchAPI(`/settings/${key}`, {
+        method: 'DELETE',
+        headers: getAdminAuthHeaders(),
+    }),
+};
+
+// ============= Reservations API =============
+
+export const reservationsAPI = {
+    create: (reservationData) => fetchAPI('/reservations', {
+        method: 'POST', body: JSON.stringify(reservationData),
+        headers: getMemberAuthHeaders(),
+    }),
+    getMy: (params = {}) => {
+        const queryParams = new URLSearchParams(params).toString();
+        return fetchAPI(`/reservations/my${queryParams ? `?${queryParams}` : ''}`, { headers: getMemberAuthHeaders() });
+    },
+    cancel: (id, cancellation_note = '') => fetchAPI(`/reservations/${id}/cancel`, {
+        method: 'PATCH',
+        body: JSON.stringify(cancellation_note ? { cancellation_note } : {}),
+        headers: getMemberAuthHeaders(),
+    }),
+    getAll: (params = {}) => {
+        const queryParams = new URLSearchParams(params).toString();
+        return fetchAPI(`/reservations${queryParams ? `?${queryParams}` : ''}`, { headers: getAdminAuthHeaders() });
+    },
 };
 
 // ============= Collections API =============
@@ -226,6 +254,8 @@ export const financialAPI = {
         method: 'POST', body: JSON.stringify({ member_id, amount }),
         headers: getAdminAuthHeaders(),
     }),
+    getMyTransactions: (limit = 20) => fetchAPI(`/financial/my-transactions?limit=${limit}`, { headers: getMemberAuthHeaders() }),
+    getRecentTransactions: (limit = 15) => fetchAPI(`/financial/recent-transactions?limit=${limit}`, { headers: getAdminAuthHeaders() }),
     getDashboardStats: () => fetchAPI('/financial/dashboard-stats', { headers: getAdminAuthHeaders() }),
     getOverdueSummary: () => fetchAPI('/financial/overdue-summary',  { headers: getAdminAuthHeaders() }),
     getMonthlySummary: (year, month) => fetchAPI(`/financial/monthly-summary?year=${year}&month=${month}`, { headers: getAdminAuthHeaders() }),
@@ -334,6 +364,7 @@ export default {
     audit:           auditAPI,
     cms:             cmsAPI,
     settings:        settingsAPI,
+    reservations:    reservationsAPI,
     collections:     collectionsAPI,
     recommendations: recommendationsAPI,
     financial:       financialAPI,

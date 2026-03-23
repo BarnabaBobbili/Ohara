@@ -1,21 +1,20 @@
-import { useEffect, useState } from 'react';
-import { useParams, useLocation } from 'react-router-dom';
+import { useCallback, useEffect, useState } from 'react';
+import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
-import { booksAPI } from '../services/api';
+import { booksAPI, reservationsAPI } from '../services/api';
+import { getAuthState } from '../services/authStore';
 
 export default function BookDetail() {
     const { id } = useParams();
     const location = useLocation();
+    const navigate = useNavigate();
     const [book, setBook] = useState(location.state?.book || null);
     const [loading, setLoading] = useState(!location.state?.book);
+    const [reserving, setReserving] = useState(false);
+    const [reserveMessage, setReserveMessage] = useState('');
+    const [myReservation, setMyReservation] = useState(null);
 
-    useEffect(() => {
-        if (!book || String(book.id) !== id) {
-            loadBookDetails();
-        }
-    }, [id]);
-
-    const loadBookDetails = async () => {
+    const loadBookDetails = useCallback(async () => {
         setLoading(true);
         try {
             const data = await booksAPI.getById(id);
@@ -25,6 +24,75 @@ export default function BookDetail() {
             setBook(null);
         } finally {
             setLoading(false);
+        }
+    }, [id]);
+
+    useEffect(() => {
+        if (!book || String(book.id) !== id) {
+            loadBookDetails();
+        }
+    }, [book, id, loadBookDetails]);
+
+    useEffect(() => {
+        const authState = getAuthState();
+        if (!authState.isAuthenticated) {
+            setMyReservation(null);
+            return;
+        }
+
+        let isMounted = true;
+        reservationsAPI.getMy({ status: 'pending', limit: 100 })
+            .then((reservations) => {
+                if (!isMounted) return;
+                const activeReservation = Array.isArray(reservations)
+                    ? reservations.find((reservation) => Number(reservation.book_id) === Number(id))
+                    : null;
+                setMyReservation(activeReservation || null);
+            })
+            .catch(() => {
+                if (!isMounted) return;
+                setMyReservation(null);
+            });
+
+        return () => {
+            isMounted = false;
+        };
+    }, [id]);
+
+    const handleReserve = async () => {
+        const authState = getAuthState();
+        if (!authState.isAuthenticated) {
+            navigate('/login');
+            return;
+        }
+
+        setReserving(true);
+        setReserveMessage('');
+        try {
+            const reservation = await reservationsAPI.create({ book_id: Number.parseInt(id, 10) });
+            setMyReservation(reservation);
+            const queue = reservation?.position_in_queue ? ` Queue #${reservation.position_in_queue}.` : '';
+            setReserveMessage(`Reservation placed successfully.${queue}`);
+        } catch (error) {
+            setReserveMessage(error.message || 'Failed to reserve this book');
+        } finally {
+            setReserving(false);
+        }
+    };
+
+    const handleCancelReservation = async () => {
+        if (!myReservation?.id) return;
+
+        setReserving(true);
+        setReserveMessage('');
+        try {
+            await reservationsAPI.cancel(myReservation.id);
+            setMyReservation(null);
+            setReserveMessage('Reservation cancelled successfully.');
+        } catch (error) {
+            setReserveMessage(error.message || 'Failed to cancel reservation');
+        } finally {
+            setReserving(false);
         }
     };
 
@@ -103,14 +171,33 @@ export default function BookDetail() {
                             </div>
 
                             <div className="flex flex-wrap gap-4">
-                                {book.available_copies > 0 ? (
+                                {myReservation?.status === 'pending' ? (
+                                    <>
+                                        <button
+                                            className="bg-slate-500 text-white px-8 py-3 rounded-full font-semibold tracking-wide cursor-not-allowed"
+                                            disabled
+                                        >
+                                            Reserved {myReservation?.position_in_queue ? `(Queue #${myReservation.position_in_queue})` : ''}
+                                        </button>
+                                        <button
+                                            onClick={handleCancelReservation}
+                                            disabled={reserving}
+                                            className="bg-white border border-[#d6d8df] hover:bg-[#f4f4f7] text-slate-700 px-6 py-3 rounded-full font-semibold tracking-wide transition-colors disabled:opacity-60"
+                                        >
+                                            {reserving ? 'Cancelling...' : 'Cancel Reservation'}
+                                        </button>
+                                    </>
+                                ) : (
                                     <button
+                                        onClick={handleReserve}
+                                        disabled={reserving}
                                         className="bg-[#17cf91] hover:bg-[#17cf91]/90 text-white px-8 py-3 rounded-full font-semibold tracking-wide transition-all"
                                         style={{ boxShadow: '0 10px 25px rgba(23, 207, 145, 0.3)' }}
                                     >
-                                        Reserve Copy
+                                        {reserving ? 'Reserving...' : book.available_copies > 0 ? 'Reserve Copy' : 'Join Waitlist'}
                                     </button>
-                                ) : (
+                                )}
+                                {book.available_copies <= 0 && (
                                     <div className="px-6 py-3 bg-slate-100 dark:bg-slate-800 rounded-full">
                                         <span className="text-sm font-medium text-slate-600 dark:text-slate-300">
                                             Currently unavailable
@@ -118,6 +205,11 @@ export default function BookDetail() {
                                     </div>
                                 )}
                             </div>
+                            {reserveMessage && (
+                                <p className={`mt-4 text-sm ${reserveMessage.toLowerCase().includes('success') ? 'text-emerald-600' : 'text-red-600'}`}>
+                                    {reserveMessage}
+                                </p>
+                            )}
                         </div>
                     </div>
 

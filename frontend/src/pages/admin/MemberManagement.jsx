@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { membersAPI } from '../../services/api';
+import { membersAPI, financialAPI } from '../../services/api';
 
 export default function MemberManagement() {
     const [members, setMembers] = useState([]);
@@ -8,6 +8,10 @@ export default function MemberManagement() {
     const [showModal, setShowModal] = useState(false);
     const [editingMember, setEditingMember] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [showPaymentModal, setShowPaymentModal] = useState(false);
+    const [paymentMember, setPaymentMember] = useState(null);
+    const [paymentAmount, setPaymentAmount] = useState('0.00');
+    const [paymentLoading, setPaymentLoading] = useState(false);
     const [formData, setFormData] = useState({
         name: '', email: '', phone: '', address: '', member_type: 'public', status: 'active',
         date_of_birth: '', gender: '', role: 'member', max_books_allowed: 5, loan_period_days: 14,
@@ -49,6 +53,47 @@ export default function MemberManagement() {
             loadMembers();
         } catch (error) {
             alert('Failed to delete: ' + error.message);
+        }
+    };
+
+    const openPaymentModal = (member) => {
+        const currentFines = Number.parseFloat(member.fines || 0);
+        if (currentFines <= 0) {
+            alert('This member has no outstanding dues.');
+            return;
+        }
+        setPaymentMember(member);
+        setPaymentAmount(currentFines.toFixed(2));
+        setShowPaymentModal(true);
+    };
+
+    const closePaymentModal = () => {
+        setShowPaymentModal(false);
+        setPaymentMember(null);
+        setPaymentAmount('0.00');
+    };
+
+    const handleClearDues = async (e) => {
+        e.preventDefault();
+        if (!paymentMember) return;
+
+        const amount = Number.parseFloat(paymentAmount);
+        if (!Number.isFinite(amount) || amount <= 0) {
+            alert('Please enter a valid amount greater than 0.');
+            return;
+        }
+
+        setPaymentLoading(true);
+        try {
+            const result = await financialAPI.processPayment(paymentMember.id, amount);
+            const remaining = Number.parseFloat(result?.remaining_balance ?? 0);
+            alert(`Payment processed successfully. Remaining due: $${remaining.toFixed(2)}`);
+            closePaymentModal();
+            loadMembers();
+        } catch (error) {
+            alert('Failed to process payment: ' + error.message);
+        } finally {
+            setPaymentLoading(false);
         }
     };
 
@@ -178,6 +223,15 @@ export default function MemberManagement() {
                                     <button onClick={() => openEditModal(member)} className="p-1 text-[#6B6560] hover:text-[#c16549]">
                                         <span className="material-symbols-outlined text-lg">edit</span>
                                     </button>
+                                    {Number.parseFloat(member.fines || 0) > 0 && (
+                                        <button
+                                            onClick={() => openPaymentModal(member)}
+                                            className="p-1 text-[#6B6560] hover:text-green-600"
+                                            title="Clear dues"
+                                        >
+                                            <span className="material-symbols-outlined text-lg">payments</span>
+                                        </button>
+                                    )}
                                     <button onClick={() => handleDelete(member.id)} className="p-1 text-[#6B6560] hover:text-red-500">
                                         <span className="material-symbols-outlined text-lg">delete</span>
                                     </button>
@@ -287,6 +341,62 @@ export default function MemberManagement() {
                             <div className="flex gap-3 pt-2">
                                 <button type="button" onClick={closeModal} className="flex-1 px-4 py-2 border border-[#E8E4DF] text-sm font-medium hover:bg-[#FAF7F2] transition-colors">Cancel</button>
                                 <button type="submit" className="flex-1 px-4 py-2 bg-[#c16549] text-white text-sm font-medium hover:bg-[#a85443] transition-colors">{editingMember ? 'Update' : 'Add'}</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Dues Payment Modal */}
+            {showPaymentModal && paymentMember && (
+                <div className="fixed inset-0 bg-black/50 z-[110] flex items-center justify-center p-4">
+                    <div className="bg-white w-full max-w-md rounded-lg shadow-2xl">
+                        <div className="p-4 border-b border-[#E8E4DF] flex items-center justify-between">
+                            <h2 className="text-lg font-bold text-[#1E1815]">Clear Member Dues</h2>
+                            <button onClick={closePaymentModal} className="p-1 hover:bg-[#FAF7F2] rounded">
+                                <span className="material-symbols-outlined text-[#6B6560]">close</span>
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleClearDues} className="p-4 space-y-4">
+                            <div className="bg-[#FAF7F2] border border-[#E8E4DF] p-3">
+                                <p className="text-sm text-[#1E1815] font-medium">{paymentMember.name}</p>
+                                <p className="text-xs text-[#6B6560]">{paymentMember.email}</p>
+                                <p className="mt-2 text-sm text-red-700 font-semibold">
+                                    Current due: ${Number.parseFloat(paymentMember.fines || 0).toFixed(2)}
+                                </p>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-semibold text-[#6B6560] uppercase tracking-wide mb-1">Payment Amount *</label>
+                                <input
+                                    type="number"
+                                    min="0.01"
+                                    step="0.01"
+                                    max={Number.parseFloat(paymentMember.fines || 0).toFixed(2)}
+                                    value={paymentAmount}
+                                    onChange={(e) => setPaymentAmount(e.target.value)}
+                                    className="w-full px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none"
+                                    required
+                                />
+                                <p className="mt-1 text-xs text-[#6B6560]">Use full amount to clear all dues, or partial to reduce balance.</p>
+                            </div>
+
+                            <div className="flex gap-3 pt-1">
+                                <button
+                                    type="button"
+                                    onClick={closePaymentModal}
+                                    className="flex-1 px-4 py-2 border border-[#E8E4DF] text-sm font-medium hover:bg-[#FAF7F2] transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={paymentLoading}
+                                    className="flex-1 px-4 py-2 bg-[#c16549] text-white text-sm font-medium hover:bg-[#a85443] transition-colors disabled:bg-gray-300"
+                                >
+                                    {paymentLoading ? 'Processing...' : 'Process Payment'}
+                                </button>
                             </div>
                         </form>
                     </div>

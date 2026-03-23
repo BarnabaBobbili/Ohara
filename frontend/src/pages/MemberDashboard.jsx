@@ -3,7 +3,51 @@ import { useEffect, useState, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import Header from '../components/Header';
 import { getAuthState } from '../services/authStore';
-import { circulationAPI, membersAPI, recommendationsAPI } from '../services/api';
+import { circulationAPI, recommendationsAPI, authAPI, settingsAPI, reservationsAPI, financialAPI } from '../services/api';
+
+const DAY_MS = 1000 * 60 * 60 * 24;
+
+function getTimeDifferenceInDays(dueDate, referenceDate = new Date()) {
+    const due = new Date(dueDate);
+    if (Number.isNaN(due.getTime())) return 0;
+
+    return (due.getTime() - referenceDate.getTime()) / DAY_MS;
+}
+
+function getDaysUntilDue(dueDate, referenceDate = new Date()) {
+    return Math.ceil(getTimeDifferenceInDays(dueDate, referenceDate));
+}
+
+function getOverdueDays(dueDate, referenceDate = new Date()) {
+    const differenceInDays = getTimeDifferenceInDays(dueDate, referenceDate);
+    if (differenceInDays >= 0) return 0;
+    return Math.ceil(Math.abs(differenceInDays));
+}
+
+function getNumericSetting(settings, keys, fallback) {
+    for (const key of keys) {
+        if (Array.isArray(settings)) {
+            const found = settings.find((item) => item?.key === key)?.value;
+            const parsed = Number.parseFloat(found);
+            if (Number.isFinite(parsed)) return parsed;
+            continue;
+        }
+
+        const parsed = Number.parseFloat(settings?.[key]);
+        if (Number.isFinite(parsed)) return parsed;
+    }
+
+    return fallback;
+}
+
+function getStaffCancellationReason(notes) {
+    if (!notes) return '';
+    const text = String(notes);
+    const lines = text.split('\n').map((line) => line.trim()).filter(Boolean);
+    const staffLine = lines.find((line) => line.toLowerCase().startsWith('staff cancellation reason:'));
+    if (!staffLine) return '';
+    return staffLine.replace(/staff cancellation reason:\s*/i, '').trim();
+}
 
 function getGreeting() {
     const hour = new Date().getHours();
@@ -13,8 +57,10 @@ function getGreeting() {
 }
 
 function DaysLeft({ dueDate }) {
-    const days = Math.ceil((new Date(dueDate) - new Date()) / (1000 * 60 * 60 * 24));
-    if (days < 0) return <span className="text-red-600 font-bold">{Math.abs(days)}d overdue</span>;
+    const overdueDays = getOverdueDays(dueDate);
+    if (overdueDays > 0) return <span className="text-red-600 font-bold">{overdueDays}d overdue</span>;
+
+    const days = getDaysUntilDue(dueDate);
     if (days === 0) return <span className="text-orange-600 font-bold">Due today</span>;
     return <span className={days <= 3 ? 'text-orange-500 font-medium' : 'text-slate-500'}>{days}d left</span>;
 }
@@ -27,6 +73,10 @@ export default function MemberDashboard() {
     const [activeLoans, setActiveLoans]     = useState([]);
     const [history, setHistory]             = useState([]);
     const [recommended, setRecommended]     = useState([]);
+    const [reservations, setReservations]   = useState([]);
+    const [financialTransactions, setFinancialTransactions] = useState([]);
+    const [reservationActionId, setReservationActionId] = useState(null);
+    const [dailyFineRate, setDailyFineRate] = useState(0.5);
     const [loading, setLoading]             = useState(true);
 
     const greeting  = getGreeting();
@@ -44,19 +94,31 @@ export default function MemberDashboard() {
     const loadDashboard = useCallback(async () => {
         setLoading(true);
         try {
-            const [loans, hist] = await Promise.all([
+            const [profile, loans, hist, settings, myReservations, myTransactions] = await Promise.all([
+                authAPI.getCurrentUser().catch(() => null),
                 circulationAPI.getMyLoans().catch(() => []),
                 circulationAPI.getMyHistory({ limit: 6 }).catch(() => []),
+                settingsAPI.getAll().catch(() => ({})),
+                reservationsAPI.getMy({ limit: 10 }).catch(() => []),
+                financialAPI.getMyTransactions(8).catch(() => []),
             ]);
             const loansArr = Array.isArray(loans) ? loans : [];
             const histArr  = Array.isArray(hist)  ? hist  : [];
+            const reservationsArr = Array.isArray(myReservations) ? myReservations : [];
+            const transactionsArr = Array.isArray(myTransactions) ? myTransactions : [];
+            const fineRate = getNumericSetting(settings, ['daily_fine_rate', 'fine_per_day'], 0.5);
+
+            setMemberProfile(profile);
+            setDailyFineRate(fineRate);
 
             setActiveLoans(loansArr);
             setHistory(histArr);
+            setReservations(reservationsArr);
+            setFinancialTransactions(transactionsArr);
 
             // If we have a book, get related recommendations
-            if (loansArr.length > 0 && loansArr[0].book?.id) {
-                recommendationsAPI.getRelated(loansArr[0].book.id, 4)
+            if (loansArr.length > 0 && loansArr[0].books?.id) {
+                recommendationsAPI.getRelated(loansArr[0].books.id, 4)
                     .then(r => setRecommended(Array.isArray(r) ? r : []))
                     .catch(() => {});
             } else {
@@ -71,6 +133,20 @@ export default function MemberDashboard() {
         }
     }, []);
 
+    const handleCancelReservation = useCallback(async (reservationId) => {
+        if (!reservationId) return;
+        setReservationActionId(reservationId);
+        try {
+            await reservationsAPI.cancel(reservationId);
+            const updatedReservations = await reservationsAPI.getMy({ limit: 10 }).catch(() => []);
+            setReservations(Array.isArray(updatedReservations) ? updatedReservations : []);
+        } catch {
+            /* silent */
+        } finally {
+            setReservationActionId(null);
+        }
+    }, []);
+
     useEffect(() => {
         if (authState.isAuthenticated) loadDashboard();
     }, [authState.isAuthenticated, loadDashboard]);
@@ -78,13 +154,23 @@ export default function MemberDashboard() {
     // Derived stats
     const currentRead = activeLoans[0] || null;
     const dueSoonBook = activeLoans.find(l => {
-        const days = Math.ceil((new Date(l.due_date) - new Date()) / (1000 * 60 * 60 * 24));
+        const days = getDaysUntilDue(l.due_date);
         return days <= 3;
     }) || null;
     const totalBorrowed  = history.length;
     const totalReturned  = history.filter(h => h.status === 'returned').length;
     const totalActive    = activeLoans.length;
-    const overdueCount   = activeLoans.filter(l => new Date(l.due_date) < new Date()).length;
+    const overdueCount   = activeLoans.filter(l => getOverdueDays(l.due_date) > 0).length;
+    const currentDues = Number.parseFloat(memberProfile?.fines || 0);
+    const currentReadOverdueDays = currentRead ? getOverdueDays(currentRead.due_date) : 0;
+    const isCurrentReadOverdue = currentReadOverdueDays > 0;
+    const currentReadEstimatedFine = currentReadOverdueDays * dailyFineRate;
+    const overdueLoans = activeLoans
+        .filter((loan) => getOverdueDays(loan.due_date) > 0)
+        .sort((left, right) => getOverdueDays(right.due_date) - getOverdueDays(left.due_date));
+    const recentBorrowedBooks = history
+        .filter((loan) => loan.status === 'returned')
+        .slice(0, 4);
 
     return (
         <>
@@ -140,15 +226,15 @@ export default function MemberDashboard() {
                                             <div className="relative group bg-white dark:bg-[#1a202c] rounded-2xl p-6 md:p-8 shadow-[0_4px_20px_-2px_rgba(0,0,0,0.05)] flex flex-col md:flex-row gap-8 items-start hover:shadow-lg transition-shadow duration-300 h-full">
                                                 {/* Cover */}
                                                 <div className="relative shrink-0 w-32 md:w-48 aspect-[2/3] rounded-lg shadow-lg rotate-1 group-hover:rotate-0 transition-transform duration-500 ease-out origin-bottom-left overflow-hidden bg-gray-200">
-                                                    {currentRead.book?.cover_image_url ? (
+                                                    {currentRead.books?.cover_image_url ? (
                                                         <img
-                                                            src={currentRead.book.cover_image_url}
-                                                            alt={currentRead.book.title}
+                                                            src={currentRead.books.cover_image_url}
+                                                            alt={currentRead.books.title}
                                                             className="w-full h-full object-cover"
                                                         />
                                                     ) : (
                                                         <div className="w-full h-full bg-gradient-to-br from-[#2463eb] to-[#7c3aed] flex items-end p-3">
-                                                            <p className="text-white font-bold italic text-sm leading-tight">{currentRead.book?.title}</p>
+                                                            <p className="text-white font-bold italic text-sm leading-tight">{currentRead.books?.title}</p>
                                                         </div>
                                                     )}
                                                     <div className="absolute inset-0 bg-gradient-to-tr from-black/20 to-transparent rounded-lg" />
@@ -160,33 +246,55 @@ export default function MemberDashboard() {
                                                         <div className="flex justify-between items-start">
                                                             <div>
                                                                 <h3 className="text-2xl md:text-3xl font-bold text-[#1e293b] dark:text-white mb-2 leading-tight">
-                                                                    {currentRead.book?.title}
+                                                                    {currentRead.books?.title}
                                                                 </h3>
                                                                 <p className="text-gray-500 dark:text-gray-400 text-lg italic">
-                                                                    by {currentRead.book?.author || '—'}
+                                                                    by {currentRead.books?.author || '—'}
                                                                 </p>
                                                             </div>
                                                         </div>
                                                         <div className="mt-4 flex items-center gap-3 text-sm text-gray-500 flex-wrap">
-                                                            {currentRead.book?.category && (
+                                                            {currentRead.books?.category && (
                                                                 <span className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-xs font-semibold uppercase tracking-wide">
-                                                                    {currentRead.book.category}
+                                                                    {currentRead.books.category}
                                                                 </span>
                                                             )}
+                                                            <span className="flex items-center gap-1">
+                                                                <span className="material-symbols-outlined text-[16px]">calendar_today</span>
+                                                                Borrowed: {new Date(currentRead.checkout_date).toLocaleDateString()}
+                                                            </span>
                                                             <span className="flex items-center gap-1">
                                                                 <span className="material-symbols-outlined text-[16px]">event</span>
                                                                 Due: {new Date(currentRead.due_date).toLocaleDateString()}
                                                             </span>
                                                             <DaysLeft dueDate={currentRead.due_date} />
                                                         </div>
+                                                        {/* Loan Details */}
+                                                        <div className="mt-3 flex items-center gap-3 text-xs text-gray-400">
+                                                            <span className="flex items-center gap-1">
+                                                                <span className="material-symbols-outlined text-[14px]">verified</span>
+                                                                Condition: <span className="capitalize">{currentRead.checkout_condition || 'good'}</span>
+                                                            </span>
+                                                            {currentRead.books?.isbn && (
+                                                                <span className="flex items-center gap-1">
+                                                                    <span className="material-symbols-outlined text-[14px]">qr_code_2</span>
+                                                                    ISBN: {currentRead.books.isbn}
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     </div>
 
                                                     <div className="mt-8 md:mt-auto">
                                                         {/* Status */}
                                                         <div className="mb-3 text-sm font-medium text-gray-500">
-                                                            Status: <span className={`font-bold ${currentRead.status === 'overdue' ? 'text-red-600' : 'text-emerald-600'}`}>
-                                                                {currentRead.status === 'checked_out' ? 'Checked out' : currentRead.status}
+                                                            Status: <span className={`font-bold ${currentRead.status === 'overdue' || isCurrentReadOverdue ? 'text-red-600' : 'text-emerald-600'}`}>
+                                                                {isCurrentReadOverdue ? 'Overdue' : currentRead.status === 'checked_out' ? 'Checked out' : currentRead.status}
                                                             </span>
+                                                            {isCurrentReadOverdue && (
+                                                                <span className="ml-2 text-xs text-red-500">
+                                                                    {`(Est. fine: $${currentReadEstimatedFine.toFixed(2)} at $${dailyFineRate.toFixed(2)}/day)`}
+                                                                </span>
+                                                            )}
                                                         </div>
                                                         <div className="flex flex-wrap gap-3">
                                                             <Link to="/catalog"
@@ -221,10 +329,13 @@ export default function MemberDashboard() {
                                                     { icon: 'done_all',    value: totalReturned,  label: 'Returned' },
                                                     { icon: 'history',     value: totalBorrowed,  label: 'Total Borrows' },
                                                     { icon: 'warning',     value: overdueCount,   label: 'Overdue', danger: overdueCount > 0 },
+                                                    { icon: 'payments',    value: currentDues, label: 'Current Dues', danger: currentDues > 0, formatCurrency: true },
                                                 ].map(stat => (
                                                     <div key={stat.label} className={`p-3 rounded-xl flex flex-col gap-1 border ${stat.danger && stat.value > 0 ? 'bg-red-50 border-red-100 dark:bg-red-900/20 dark:border-red-800/30' : 'bg-gray-50 dark:bg-gray-800/50 border-gray-100 dark:border-gray-700'}`}>
                                                         <span className={`material-symbols-outlined text-[20px] ${stat.danger && stat.value > 0 ? 'text-red-500' : 'text-gray-400'}`}>{stat.icon}</span>
-                                                        <span className={`text-2xl font-bold ${stat.danger && stat.value > 0 ? 'text-red-600' : 'text-[#1e293b] dark:text-white'}`}>{stat.value}</span>
+                                                        <span className={`text-2xl font-bold ${stat.danger && stat.value > 0 ? 'text-red-600' : 'text-[#1e293b] dark:text-white'}`}>
+                                                            {stat.formatCurrency ? `$${Number.parseFloat(stat.value || 0).toFixed(2)}` : stat.value}
+                                                        </span>
                                                         <span className="text-xs text-gray-500">{stat.label}</span>
                                                     </div>
                                                 ))}
@@ -243,15 +354,15 @@ export default function MemberDashboard() {
                                                 </div>
                                                 <div className="flex gap-4 items-center">
                                                     <div className="w-12 h-16 rounded overflow-hidden shrink-0 bg-gray-200">
-                                                        {dueSoonBook.book?.cover_image_url ? (
-                                                            <img src={dueSoonBook.book.cover_image_url} alt="" className="w-full h-full object-cover" />
+                                                        {dueSoonBook.books?.cover_image_url ? (
+                                                            <img src={dueSoonBook.books.cover_image_url} alt="" className="w-full h-full object-cover" />
                                                         ) : (
                                                             <div className="w-full h-full bg-gradient-to-br from-[#7D3C3C] to-[#c0392b]" />
                                                         )}
                                                     </div>
                                                     <div>
-                                                        <p className="font-medium text-[#1e293b] dark:text-white leading-tight">{dueSoonBook.book?.title}</p>
-                                                        <p className="text-xs text-gray-500 mt-0.5">{dueSoonBook.book?.author}</p>
+                                                        <p className="font-medium text-[#1e293b] dark:text-white leading-tight">{dueSoonBook.books?.title}</p>
+                                                        <p className="text-xs text-gray-500 mt-0.5">{dueSoonBook.books?.author}</p>
                                                     </div>
                                                 </div>
                                             </div>
@@ -278,15 +389,15 @@ export default function MemberDashboard() {
                                             {activeLoans.map(loan => (
                                                 <div key={loan.id} className="bg-white dark:bg-[#1a202c] rounded-xl p-4 flex gap-4 shadow-sm border border-gray-100 dark:border-gray-700">
                                                     <div className="w-10 h-14 rounded overflow-hidden shrink-0 bg-gray-200">
-                                                        {loan.book?.cover_image_url ? (
-                                                            <img src={loan.book.cover_image_url} alt="" className="w-full h-full object-cover" />
+                                                        {loan.books?.cover_image_url ? (
+                                                            <img src={loan.books.cover_image_url} alt="" className="w-full h-full object-cover" />
                                                         ) : (
                                                             <div className="w-full h-full bg-gradient-to-br from-gray-400 to-gray-600" />
                                                         )}
                                                     </div>
                                                     <div className="flex-1 min-w-0">
-                                                        <p className="font-semibold text-sm truncate">{loan.book?.title}</p>
-                                                        <p className="text-xs text-gray-500 truncate">{loan.book?.author}</p>
+                                                        <p className="font-semibold text-sm truncate">{loan.books?.title}</p>
+                                                        <p className="text-xs text-gray-500 truncate">{loan.books?.author}</p>
                                                         <p className="text-xs mt-1">
                                                             <DaysLeft dueDate={loan.due_date} />
                                                         </p>
@@ -296,6 +407,129 @@ export default function MemberDashboard() {
                                         </div>
                                     </section>
                                 )}
+
+                                <section className="bg-white dark:bg-[#1a202c] rounded-2xl p-6 shadow-sm border border-[#e4e8f1] dark:border-gray-700/60 relative overflow-hidden">
+                                    <div className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-[#2463eb] via-[#2c7be5] to-[#4f46e5]" />
+                                    <div className="flex items-center justify-between mb-5">
+                                        <h2 className="text-lg font-semibold text-[#1e293b] dark:text-gray-100 flex items-center gap-2">
+                                            <span className="material-symbols-outlined text-[#2463eb]">receipt_long</span>
+                                            Account Center
+                                        </h2>
+                                        <span className="text-xs uppercase tracking-[0.12em] text-[#64748b]">Live Member Ledger</span>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                                        <div className="rounded-xl border border-[#dbe5fb] bg-[#f6f9ff] dark:bg-[#172235] dark:border-[#2b3f63] p-4">
+                                            <div className="flex items-center justify-between mb-3">
+                                                <p className="text-sm font-semibold text-[#1f3a68] dark:text-blue-200">Dues & Reservations</p>
+                                                <p className={`text-lg font-bold ${currentDues > 0 ? 'text-red-600' : 'text-emerald-600'}`}>${currentDues.toFixed(2)}</p>
+                                            </div>
+                                            <p className="text-xs text-[#4f648c] dark:text-blue-300 mb-3">Outstanding dues must be cleared before new reservations.</p>
+                                            {reservations.length === 0 ? (
+                                                <p className="text-xs text-[#64748b] dark:text-gray-400">No reservations yet.</p>
+                                            ) : (
+                                                <div className="space-y-2">
+                                                    {reservations.slice(0, 6).map((reservation) => (
+                                                        <div key={reservation.id} className="bg-white/90 dark:bg-[#111827] rounded-lg px-3 py-2 border border-[#e2ebff] dark:border-gray-700">
+                                                            <div className="flex items-center justify-between gap-3">
+                                                                <div className="min-w-0">
+                                                                    <p className="text-sm font-medium truncate">{reservation.books?.title || 'Untitled Book'}</p>
+                                                                    <p className="text-xs text-[#64748b]">
+                                                                        {reservation.status === 'pending'
+                                                                            ? `Queue #${reservation.position_in_queue || '-'} • Expires ${reservation.expiry_date ? new Date(reservation.expiry_date).toLocaleDateString() : 'N/A'}`
+                                                                            : `${reservation.status?.toUpperCase() || 'UNKNOWN'} • ${reservation.updated_at ? new Date(reservation.updated_at).toLocaleDateString() : ''}`}
+                                                                    </p>
+                                                                </div>
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className={`text-[10px] uppercase tracking-wide px-2 py-1 rounded-full font-semibold ${reservation.status === 'pending' ? 'bg-blue-100 text-blue-700' : reservation.status === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-700'}`}>
+                                                                        {reservation.status || 'unknown'}
+                                                                    </span>
+                                                                    {reservation.status === 'pending' && (
+                                                                        <button
+                                                                            onClick={() => handleCancelReservation(reservation.id)}
+                                                                            disabled={reservationActionId === reservation.id}
+                                                                            className="text-xs px-2.5 py-1 rounded-md bg-red-600 text-white hover:bg-red-700 transition-colors disabled:bg-gray-300"
+                                                                        >
+                                                                            {reservationActionId === reservation.id ? 'Cancelling...' : 'Cancel'}
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                            {reservation.status === 'cancelled' && getStaffCancellationReason(reservation.notes) && (
+                                                                <p className="mt-2 text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 px-2.5 py-1.5 rounded border border-red-100 dark:border-red-800/40">
+                                                                    Admin note: {getStaffCancellationReason(reservation.notes)}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="rounded-xl border border-[#f4d5d8] bg-[#fff7f8] dark:bg-[#301a1e] dark:border-[#5f2f36] p-4">
+                                            <div className="flex items-center justify-between mb-3">
+                                                <p className="text-sm font-semibold text-[#8b2d3b] dark:text-red-200">Overdue Books</p>
+                                                <p className="text-lg font-bold text-red-600">{overdueLoans.length}</p>
+                                            </div>
+                                            {overdueLoans.length === 0 ? (
+                                                <p className="text-xs text-emerald-700 dark:text-emerald-300">No overdue books.</p>
+                                            ) : (
+                                                <div className="space-y-2">
+                                                    {overdueLoans.slice(0, 4).map((loan) => (
+                                                        <div key={loan.id} className="bg-white/90 dark:bg-[#111827] rounded-lg px-3 py-2 border border-[#f6dde1] dark:border-[#5f2f36]">
+                                                            <p className="text-sm font-medium truncate">{loan.books?.title || 'Untitled Book'}</p>
+                                                            <p className="text-xs text-[#9b4d58] dark:text-red-300">{getOverdueDays(loan.due_date)} days overdue • Est. ${(getOverdueDays(loan.due_date) * dailyFineRate).toFixed(2)}</p>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="rounded-xl border border-[#e7e2d1] bg-[#fffdf6] dark:bg-[#29231a] dark:border-[#4f432d] p-4">
+                                            <div className="flex items-center justify-between mb-3">
+                                                <p className="text-sm font-semibold text-[#6a5732] dark:text-amber-200">Past Borrowed Books</p>
+                                                <p className="text-lg font-bold text-[#8a6a2e]">{recentBorrowedBooks.length}</p>
+                                            </div>
+                                            {recentBorrowedBooks.length === 0 ? (
+                                                <p className="text-xs text-[#6b7280] dark:text-gray-400">No returned books yet.</p>
+                                            ) : (
+                                                <div className="space-y-2">
+                                                    {recentBorrowedBooks.map((item) => (
+                                                        <div key={item.id} className="bg-white/90 dark:bg-[#111827] rounded-lg px-3 py-2 border border-[#efe8d7] dark:border-[#4f432d] flex items-center justify-between gap-3">
+                                                            <p className="text-sm font-medium truncate">{item.books?.title || 'Untitled Book'}</p>
+                                                            <span className="text-xs text-[#8b8f97]">{new Date(item.checkout_date).toLocaleDateString()}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="rounded-xl border border-[#d6e8dd] bg-[#f6fffb] dark:bg-[#192822] dark:border-[#2f5143] p-4">
+                                            <div className="flex items-center justify-between mb-3">
+                                                <p className="text-sm font-semibold text-[#245840] dark:text-emerald-200">Financial Transactions</p>
+                                                <p className="text-lg font-bold text-[#1c7f5a]">{financialTransactions.length}</p>
+                                            </div>
+                                            {financialTransactions.length === 0 ? (
+                                                <p className="text-xs text-[#6b7280] dark:text-gray-400">No financial records available.</p>
+                                            ) : (
+                                                <div className="space-y-2">
+                                                    {financialTransactions.slice(0, 5).map((item) => (
+                                                        <div key={item.id} className="bg-white/90 dark:bg-[#111827] rounded-lg px-3 py-2 border border-[#ddefe5] dark:border-[#2f5143] flex items-center justify-between gap-3">
+                                                            <div className="min-w-0">
+                                                                <p className="text-sm font-medium capitalize truncate">{item.transaction_type || 'transaction'}</p>
+                                                                <p className="text-xs text-[#64748b] truncate">{item.description || 'Ledger entry'}</p>
+                                                            </div>
+                                                            <div className="text-right shrink-0">
+                                                                <p className={`text-sm font-bold ${item.transaction_type === 'payment' ? 'text-emerald-600' : 'text-red-600'}`}>${Number.parseFloat(item.amount || 0).toFixed(2)}</p>
+                                                                <p className="text-[11px] text-[#8b8f97]">{item.created_at ? new Date(item.created_at).toLocaleDateString() : ''}</p>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </section>
 
                                 {/* Bottom: History + Recommendations */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -312,14 +546,14 @@ export default function MemberDashboard() {
                                                 {history.slice(0, 5).map(tx => (
                                                     <div key={tx.id} className="flex items-center gap-3 py-2 border-b border-gray-50 dark:border-gray-800 last:border-0">
                                                         <div className="w-8 h-11 rounded overflow-hidden shrink-0 bg-gray-200">
-                                                            {tx.book?.cover_image_url ? (
-                                                                <img src={tx.book.cover_image_url} alt="" className="w-full h-full object-cover" />
+                                                            {tx.books?.cover_image_url ? (
+                                                                <img src={tx.books.cover_image_url} alt="" className="w-full h-full object-cover" />
                                                             ) : (
                                                                 <div className="w-full h-full bg-gradient-to-br from-gray-300 to-gray-500" />
                                                             )}
                                                         </div>
                                                         <div className="flex-1 min-w-0">
-                                                            <p className="font-medium text-sm truncate">{tx.book?.title}</p>
+                                                            <p className="font-medium text-sm truncate">{tx.books?.title}</p>
                                                             <p className="text-xs text-gray-500">{new Date(tx.checkout_date).toLocaleDateString()}</p>
                                                         </div>
                                                         <span className={`text-xs font-bold uppercase px-2 py-0.5 rounded-full ${
