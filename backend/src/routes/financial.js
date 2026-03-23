@@ -1,18 +1,39 @@
 import express from 'express';
 import prisma from '../db/prisma.js';
 import { getMySQLPool } from '../db/mysql.js';
+import { insertFinancialRecord } from '../db/financialRecords.js';
 import { authenticateToken, requireStaff, requireAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// ─── Helper: Log to MySQL financial_records ───────────────────
-const logFinancialRecord = async (pool, { member_id, type, amount, description, pg_transaction_id, processed_by }) => {
-    await pool.execute(
-        `INSERT INTO financial_records
-         (member_id, transaction_type, amount, description, pg_transaction_id, processed_by)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [member_id, type, amount, description || null, pg_transaction_id || null, processed_by || 'system']
-    );
+const resolveMemberFromReq = async (req) => {
+    const select = { id: true, email: true, name: true, role: true, status: true };
+
+    if (req.supabase_uid) {
+        const member = await prisma.members.findFirst({
+            where: { supabase_uid: req.supabase_uid },
+            select,
+        });
+        if (member) return member;
+    }
+
+    if (req.user_email) {
+        const member = await prisma.members.findUnique({
+            where: { email: req.user_email },
+            select,
+        });
+        if (member) return member;
+    }
+
+    if (req.user?.user_id) {
+        const member = await prisma.members.findUnique({
+            where: { id: req.user.user_id },
+            select,
+        });
+        if (member) return member;
+    }
+
+    return null;
 };
 
 // ─── POST /api/financial/process-payment — Staff only ────────
@@ -34,16 +55,21 @@ router.post('/process-payment', authenticateToken, requireStaff, async (req, res
             SELECT * FROM public.fn_process_payment(${member_id}::int, ${numAmount}::numeric, ${req.actor.email}::text)
         `;
 
-        // Log to MySQL
-        const pool = getMySQLPool();
-        if (pool) {
-            await logFinancialRecord(pool, {
-                member_id,
-                type: 'payment',
-                amount: numAmount,
-                description: `Fine payment processed by ${req.actor.email}`,
-                processed_by: req.actor.email,
-            });
+        // Log to MySQL (non-blocking for user flow)
+        try {
+            const pool = getMySQLPool();
+            if (pool) {
+                await insertFinancialRecord(pool, {
+                    member_id,
+                    type: 'payment',
+                    amount: numAmount,
+                    description: `Fine payment processed by ${req.actor.email}`,
+                    processed_by: req.actor.email,
+                    processed_by_id: req.actor.id,
+                });
+            }
+        } catch (mysqlError) {
+            console.warn('MySQL financial_records logging failed for payment:', mysqlError.message);
         }
 
         res.json({
@@ -91,6 +117,54 @@ router.get('/overdue-summary', authenticateToken, requireStaff, async (req, res)
     }
 });
 
+// ─── GET /api/financial/recent-transactions — Staff only ─────────
+router.get('/recent-transactions', authenticateToken, requireStaff, async (req, res) => {
+    try {
+        const requestedLimit = Number.parseInt(req.query?.limit, 10);
+        const limit = Number.isFinite(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 100) : 15;
+
+        let pool;
+        try {
+            pool = getMySQLPool();
+        } catch {
+            return res.json([]);
+        }
+        if (!pool) return res.json([]);
+
+        const [rows] = await pool.execute(
+            `SELECT id, member_id, transaction_type, amount, description, processed_by, created_at
+             FROM financial_records
+             ORDER BY created_at DESC
+             LIMIT ?`,
+            [limit]
+        );
+
+        const records = Array.isArray(rows) ? rows : [];
+        const memberIds = [...new Set(records.map((record) => Number(record.member_id)).filter(Number.isFinite))];
+        const members = memberIds.length > 0
+            ? await prisma.members.findMany({
+                where: { id: { in: memberIds } },
+                select: { id: true, name: true, email: true, card_id: true },
+            })
+            : [];
+        const membersById = new Map(members.map((member) => [member.id, member]));
+
+        const enriched = records.map((record) => {
+            const member = membersById.get(Number(record.member_id));
+            return {
+                ...record,
+                member_name: member?.name || null,
+                member_email: member?.email || null,
+                member_card_id: member?.card_id || null,
+            };
+        });
+
+        return res.json(enriched);
+    } catch (error) {
+        return res.status(500).json({ detail: error.message });
+    }
+});
+
 // ─── GET /api/financial/monthly-summary — Admin only ─────────
 router.get('/monthly-summary', authenticateToken, requireAdmin, async (req, res) => {
     try {
@@ -113,5 +187,38 @@ router.get('/monthly-summary', authenticateToken, requireAdmin, async (req, res)
     }
 });
 
-export { logFinancialRecord };
+// ─── GET /api/financial/my-transactions — Member self ledger ─────────
+router.get('/my-transactions', authenticateToken, async (req, res) => {
+    try {
+        const member = await resolveMemberFromReq(req);
+        if (!member) {
+            return res.status(404).json({ detail: 'Member account not found' });
+        }
+
+        const requestedLimit = Number.parseInt(req.query?.limit, 10);
+        const limit = Number.isFinite(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 100) : 20;
+
+        let pool;
+        try {
+            pool = getMySQLPool();
+        } catch {
+            return res.json([]);
+        }
+        if (!pool) return res.json([]);
+
+        const [rows] = await pool.execute(
+            `SELECT id, member_id, transaction_type, amount, description, processed_by, created_at
+             FROM financial_records
+             WHERE member_id = ?
+             ORDER BY created_at DESC
+             LIMIT ?`,
+            [member.id, limit]
+        );
+
+        return res.json(Array.isArray(rows) ? rows : []);
+    } catch (error) {
+        return res.status(500).json({ detail: error.message });
+    }
+});
+
 export default router;

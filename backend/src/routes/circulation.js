@@ -5,6 +5,7 @@ import { parseSkipLimitPagination } from '../utils/pagination.js';
 import { invalidateCacheByPrefix } from '../utils/cache.js';
 import { syncCheckoutToNeo4j, syncReturnToNeo4j } from '../db/neo4j.js';
 import { getMySQLPool } from '../db/mysql.js';
+import { insertFinancialRecord } from '../db/financialRecords.js';
 import { authenticateToken, requireStaff } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -15,7 +16,7 @@ const invalidateAnalyticsCache = () => {
 
 router.post('/checkout', authenticateToken, requireStaff, async (req, res) => {
     try {
-        const { book_id, member_id, due_date } = req.body;
+        const { book_id, member_id, due_date, checkout_condition, notes } = req.body;
 
         const book = await prisma.books.findUnique({ where: { id: book_id } });
         if (!book) {
@@ -33,6 +34,13 @@ router.post('/checkout', authenticateToken, requireStaff, async (req, res) => {
             return res.status(400).json({ detail: 'Member account is not active' });
         }
 
+        const outstandingDues = Number(member.fines || 0);
+        if (outstandingDues > 0) {
+            return res.status(400).json({
+                detail: `Member has outstanding dues ($${outstandingDues.toFixed(2)}). Clear dues before checkout.`,
+            });
+        }
+
         const overdueBooks = await prisma.transactions.findFirst({
             where: { member_id, status: 'overdue' },
             select: { id: true },
@@ -46,9 +54,10 @@ router.post('/checkout', authenticateToken, requireStaff, async (req, res) => {
                 data: {
                     book_id,
                     member_id,
-                    issued_by_member: req.actor?.id || null, // admin/staff member who issued
                     due_date: new Date(due_date),
                     status: 'checked_out',
+                    checkout_condition: checkout_condition || 'good',
+                    notes: notes || null,
                 },
             });
 
@@ -92,7 +101,7 @@ router.post('/checkout', authenticateToken, requireStaff, async (req, res) => {
     }
 });
 
-const processCheckin = async (transactionId, returnCondition, req, res) => {
+const processCheckin = async (transactionId, returnCondition, notes, req, res) => {
     if (!Number.isInteger(transactionId)) {
         return res.status(400).json({ detail: 'Valid transaction_id is required' });
     }
@@ -110,14 +119,48 @@ const processCheckin = async (transactionId, returnCondition, req, res) => {
     }
 
     const now = new Date();
-    const result = await prisma.transactions.update({
+    
+    // Calculate expected fine for fallback when DB trigger is missing
+    let expectedFine = 0;
+    const dueDate = new Date(transaction.due_date);
+    if (now > dueDate) {
+        // Get fine settings from database
+        const dailyRateSetting = await prisma.site_settings.findUnique({ where: { key: 'daily_fine_rate' } });
+        const maxCapSetting = await prisma.site_settings.findUnique({ where: { key: 'max_fine_cap' } });
+        const dailyRate = dailyRateSetting?.value ? parseFloat(dailyRateSetting.value) : 1.00;
+        const maxCap = maxCapSetting?.value ? parseFloat(maxCapSetting.value) : 25.00;
+        
+        const daysOverdue = Math.ceil((now - dueDate) / (1000 * 60 * 60 * 24));
+        expectedFine = Math.min(daysOverdue * dailyRate, maxCap);
+    }
+    
+    // Build update data, appending notes if provided
+    const existingNotes = transaction.notes || '';
+    const returnNoteText = notes ? `\n[Return ${now.toISOString().split('T')[0]}]: ${notes}` : '';
+    const updatedNotes = existingNotes + returnNoteText;
+    
+    let result = await prisma.transactions.update({
         where: { id: transactionId },
         data: {
             return_date: now,
             status: 'returned',
             return_condition: returnCondition || 'good',
+            notes: updatedNotes.trim() || null,
         },
     });
+
+    // Fallback: if trigger did not set fine_amount, apply fine in app layer
+    if (expectedFine > 0 && Number(result.fine_amount || 0) <= 0) {
+        result = await prisma.transactions.update({
+            where: { id: transactionId },
+            data: { fine_amount: expectedFine },
+        });
+
+        await prisma.members.update({
+            where: { id: transaction.member_id },
+            data: { fines: { increment: expectedFine } },
+        });
+    }
 
     logActivity({
         action: 'checkin',
@@ -127,6 +170,8 @@ const processCheckin = async (transactionId, returnCondition, req, res) => {
         member_name: transaction.members.name,
         transaction_id: result.id,
         fine_amount: result.fine_amount,
+        return_condition: returnCondition,
+        checkout_condition: transaction.checkout_condition,
     });
 
     // Sync return to Neo4j (non-blocking)
@@ -140,15 +185,22 @@ const processCheckin = async (transactionId, returnCondition, req, res) => {
                 `INSERT INTO audit_trail (book_id, action, changed_by, metadata)
                  VALUES (?, 'RETURN', ?, ?)`,
                 [transaction.book_id, req.actor?.email || transaction.members?.name || 'unknown',
-                 JSON.stringify({ transaction_id: transactionId, fine_amount: result.fine_amount })]
+                 JSON.stringify({ transaction_id: transactionId, fine_amount: result.fine_amount, return_condition: returnCondition })]
             );
             if (result.fine_amount > 0) {
-                await pool.execute(
-                    `INSERT INTO financial_records (member_id, transaction_type, amount, description, pg_transaction_id)
-                     VALUES (?, 'fine', ?, ?, ?)`,
-                    [transaction.member_id, result.fine_amount,
-                     `Overdue fine for book #${transaction.book_id}`, transactionId]
-                );
+                await insertFinancialRecord(pool, {
+                    member_id: transaction.member_id,
+                    type: 'fine',
+                    amount: result.fine_amount,
+                    description: `Overdue fine for book #${transaction.book_id}`,
+                    pg_transaction_id: transactionId,
+                    related_book_id: transaction.book_id,
+                    related_book_title: transaction.books?.title,
+                    member_name: transaction.members?.name,
+                    member_card_id: transaction.members?.card_id,
+                    processed_by: req.actor?.email || transaction.members?.name || 'system',
+                    processed_by_id: req.actor?.id,
+                });
             }
         }
     } catch { /* MySQL audit is non-critical */ }
@@ -159,8 +211,8 @@ const processCheckin = async (transactionId, returnCondition, req, res) => {
 
 router.post('/checkin', authenticateToken, requireStaff, async (req, res) => {
     try {
-        const { transaction_id, return_condition } = req.body;
-        return await processCheckin(Number.parseInt(transaction_id, 10), return_condition, req, res);
+        const { transaction_id, return_condition, notes } = req.body;
+        return await processCheckin(Number.parseInt(transaction_id, 10), return_condition, notes, req, res);
     } catch (error) {
         return res.status(500).json({ detail: error.message });
     }
@@ -171,7 +223,8 @@ router.post('/checkin/:transactionId', authenticateToken, requireStaff, async (r
     try {
         const transactionId = Number.parseInt(req.params.transactionId, 10);
         const returnCondition = req.body?.return_condition;
-        return await processCheckin(transactionId, returnCondition, req, res);
+        const notes = req.body?.notes;
+        return await processCheckin(transactionId, returnCondition, notes, req, res);
     } catch (error) {
         return res.status(500).json({ detail: error.message });
     }
@@ -292,6 +345,30 @@ router.get('/overdue', authenticateToken, requireStaff, async (req, res) => {
             },
             orderBy: { due_date: 'asc' },
             skip,
+            take: limit,
+        });
+
+        res.json(transactions);
+    } catch (error) {
+        res.status(500).json({ detail: error.message });
+    }
+});
+
+router.get('/recent-returns', authenticateToken, requireStaff, async (req, res) => {
+    try {
+        const requestedLimit = Number.parseInt(req.query?.limit, 10);
+        const limit = Number.isFinite(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 100) : 12;
+
+        const transactions = await prisma.transactions.findMany({
+            where: {
+                status: 'returned',
+                return_date: { not: null },
+            },
+            include: {
+                books: { select: { title: true, isbn: true, author: true } },
+                members: { select: { name: true, card_id: true, email: true } },
+            },
+            orderBy: { return_date: 'desc' },
             take: limit,
         });
 
