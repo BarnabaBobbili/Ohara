@@ -1,7 +1,6 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Home from './pages/Home';
 import BookDetail from './pages/BookDetail';
-import SearchResults from './pages/SearchResults';
 import MemberDashboard from './pages/MemberDashboard';
 import About from './pages/About';
 import Login from './pages/Login';
@@ -34,7 +33,7 @@ function App() {
         {/* Public Routes */}
         <Route path="/" element={<Home />} />
         <Route path="/book/:id" element={<BookDetail />} />
-        <Route path="/search" element={<SearchResults />} />
+        <Route path="/search" element={<BookCatalog />} />
         <Route path="/dashboard" element={<MemberDashboard />} />
         <Route path="/about" element={<About />} />
         <Route path="/login" element={<Login />} />
@@ -43,6 +42,7 @@ function App() {
 
         {/* Book Catalog */}
         <Route path="/catalog" element={<BookCatalog />} />
+        <Route path="/catalogue" element={<BookCatalog />} />
         <Route path="/book-reader" element={<BookReader />} />
         <Route path="/collections" element={<CollectionsPage />} />
 

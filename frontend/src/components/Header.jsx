@@ -83,7 +83,7 @@ export default function Header() {
                     {/* Center: Navigation (Desktop) */}
                     <nav className="hidden lg:flex items-center gap-10">
                         <Link
-                            to="/search"
+                            to="/catalog"
                             className="text-[#4A4540] dark:text-gray-300 text-[14px] font-medium hover:text-[#c16549] transition-colors relative group"
                             style={{ fontFamily: "'Noto Sans', sans-serif" }}
                         >
@@ -91,15 +91,15 @@ export default function Header() {
                             <span className="absolute bottom-0 left-0 w-0 h-px bg-[#c16549] group-hover:w-full transition-all duration-300"></span>
                         </Link>
                         <Link
-                            to="/catalog"
+                            to="/collections"
                             className="text-[#4A4540] dark:text-gray-300 text-[14px] font-medium hover:text-[#c16549] transition-colors relative group"
                             style={{ fontFamily: "'Noto Sans', sans-serif" }}
                         >
-                            Community Books
+                            Collections
                             <span className="absolute bottom-0 left-0 w-0 h-px bg-[#c16549] group-hover:w-full transition-all duration-300"></span>
                         </Link>
                         <Link
-                            to="/search?filter=new"
+                            to="/catalog?filter=new"
                             className="text-[#4A4540] dark:text-gray-300 text-[14px] font-medium hover:text-[#c16549] transition-colors relative group"
                             style={{ fontFamily: "'Noto Sans', sans-serif" }}
                         >
@@ -107,7 +107,7 @@ export default function Header() {
                             <span className="absolute bottom-0 left-0 w-0 h-px bg-[#c16549] group-hover:w-full transition-all duration-300"></span>
                         </Link>
                         <Link
-                            to="/search?filter=staff-picks"
+                            to="/catalog?filter=staff-picks"
                             className="text-[#4A4540] dark:text-gray-300 text-[14px] font-medium hover:text-[#c16549] transition-colors relative group"
                             style={{ fontFamily: "'Noto Sans', sans-serif" }}
                         >
@@ -127,7 +127,7 @@ export default function Header() {
                     {/* Right: Actions */}
                     <div className="flex items-center gap-3 md:gap-6">
                         {/* Search Icon */}
-                        <Link to="/search" className="text-[#1E1815] dark:text-white hover:text-[#c16549] transition-colors">
+                        <Link to="/catalog" className="text-[#1E1815] dark:text-white hover:text-[#c16549] transition-colors">
                             <span className="material-symbols-outlined text-[20px] md:text-[22px]">search</span>
                         </Link>
 
@@ -286,7 +286,7 @@ export default function Header() {
                     {/* Navigation Links */}
                     <nav className="space-y-2">
                         <Link
-                            to="/search"
+                            to="/catalog"
                             onClick={() => setIsMobileMenuOpen(false)}
                             className="flex items-center gap-3 px-4 py-3 rounded-lg text-[#1E1815] dark:text-white hover:bg-[#c16549]/10 transition-colors"
                             style={{ fontFamily: "'Noto Sans', sans-serif" }}
@@ -295,16 +295,16 @@ export default function Header() {
                             Catalog
                         </Link>
                         <Link
-                            to="/catalog"
+                            to="/collections"
                             onClick={() => setIsMobileMenuOpen(false)}
                             className="flex items-center gap-3 px-4 py-3 rounded-lg text-[#1E1815] dark:text-white hover:bg-[#c16549]/10 transition-colors"
                             style={{ fontFamily: "'Noto Sans', sans-serif" }}
                         >
                             <span className="material-symbols-outlined text-[20px] text-[#c16549]">auto_stories</span>
-                            Community Books
+                            Collections
                         </Link>
                         <Link
-                            to="/search?filter=new"
+                            to="/catalog?filter=new"
                             onClick={() => setIsMobileMenuOpen(false)}
                             className="flex items-center gap-3 px-4 py-3 rounded-lg text-[#1E1815] dark:text-white hover:bg-[#c16549]/10 transition-colors"
                             style={{ fontFamily: "'Noto Sans', sans-serif" }}
@@ -313,7 +313,7 @@ export default function Header() {
                             New Arrivals
                         </Link>
                         <Link
-                            to="/search?filter=staff-picks"
+                            to="/catalog?filter=staff-picks"
                             onClick={() => setIsMobileMenuOpen(false)}
                             className="flex items-center gap-3 px-4 py-3 rounded-lg text-[#1E1815] dark:text-white hover:bg-[#c16549]/10 transition-colors"
                             style={{ fontFamily: "'Noto Sans', sans-serif" }}

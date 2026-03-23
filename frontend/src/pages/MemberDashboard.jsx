@@ -58,11 +58,11 @@ function getGreeting() {
 
 function DaysLeft({ dueDate }) {
     const overdueDays = getOverdueDays(dueDate);
-    if (overdueDays > 0) return <span className="text-red-600 font-bold">{overdueDays}d overdue</span>;
+    if (overdueDays > 0) return <span className="text-[#c16549] font-bold" style={{ fontFamily: "'Noto Sans', sans-serif" }}>{overdueDays}d overdue</span>;
 
     const days = getDaysUntilDue(dueDate);
-    if (days === 0) return <span className="text-orange-600 font-bold">Due today</span>;
-    return <span className={days <= 3 ? 'text-orange-500 font-medium' : 'text-slate-500'}>{days}d left</span>;
+    if (days === 0) return <span className="text-[#c16549] font-bold" style={{ fontFamily: "'Noto Sans', sans-serif" }}>Due today</span>;
+    return <span className={days <= 3 ? 'text-[#c16549] font-medium' : 'text-[#6B6560] dark:text-gray-400'} style={{ fontFamily: "'Noto Sans', sans-serif" }}>{days}d left</span>;
 }
 
 export default function MemberDashboard() {
@@ -175,57 +175,130 @@ export default function MemberDashboard() {
     return (
         <>
             <style>{`
+              /* Editorial Design System Styles */
               ::-webkit-scrollbar { width: 8px; }
               ::-webkit-scrollbar-track { background: transparent; }
-              ::-webkit-scrollbar-thumb { background-color: #e2e8f0; border-radius: 20px; }
-              .hand-drawn-line { border-radius: 2px 255px 25px 25px / 255px 25px 225px 255px; }
-              .hand-drawn-border { border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px; }
+              ::-webkit-scrollbar-thumb { background-color: #d4cec7; border-radius: 20px; }
+              ::-webkit-scrollbar-thumb:hover { background-color: #c16549; }
+              
+              /* Paper grain texture */
+              .bg-paper-grain {
+                background-image: url('data:image/svg+xml,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="noiseFilter"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23noiseFilter)" opacity="0.05"/%3E%3C/svg%3E');
+              }
+              
+              /* Editorial shadows */
+              .editorial-shadow {
+                box-shadow: 0 4px 20px -2px rgba(30, 24, 21, 0.08);
+              }
+              
+              .editorial-shadow-lg {
+                box-shadow: 0 10px 40px -4px rgba(30, 24, 21, 0.12);
+              }
+              
+              /* Book cover shadow */
+              .book-shadow {
+                box-shadow: -8px 8px 24px rgba(0,0,0,0.2), -2px 2px 5px rgba(0,0,0,0.1);
+              }
+              
+              /* Dotted underline accent */
+              .dotted-accent {
+                border-bottom: 2px dotted #c16549;
+                padding-bottom: 2px;
+              }
+              
+              /* Fade-in animation */
+              @keyframes fadeInUp {
+                from {
+                  opacity: 0;
+                  transform: translateY(20px);
+                }
+                to {
+                  opacity: 1;
+                  transform: translateY(0);
+                }
+              }
+              
+              .animate-fade-in-up {
+                animation: fadeInUp 0.6s ease-out forwards;
+              }
+              
+              /* Stagger delays */
+              .delay-100 { animation-delay: 0.1s; opacity: 0; }
+              .delay-200 { animation-delay: 0.2s; opacity: 0; }
+              .delay-300 { animation-delay: 0.3s; opacity: 0; }
+              .delay-400 { animation-delay: 0.4s; opacity: 0; }
             `}</style>
 
             <Header />
-            <div className="flex h-screen w-full overflow-hidden bg-[#fdfbf7] dark:bg-[#111621] text-[#1e293b] dark:text-gray-100 transition-colors duration-300 pt-24"
-                style={{ fontFamily: "'Epilogue', 'Noto Sans', sans-serif" }}>
+            <div className="flex h-screen w-full overflow-hidden bg-[#FAF7F2] dark:bg-[#1e1614] text-[#1E1815] dark:text-[#FAF7F2] transition-colors duration-300 pt-24 relative"
+                style={{ fontFamily: "'Newsreader', serif" }}>
 
-                <main className="flex-1 h-full overflow-y-auto overflow-x-hidden p-6 md:p-12 relative">
-                    <div className="max-w-[1400px] mx-auto flex flex-col gap-10">
+                {/* Paper Grain Texture Overlay */}
+                <div className="fixed inset-0 pointer-events-none z-50 mix-blend-multiply opacity-40 bg-paper-grain"></div>
 
-                        {/* Header */}
-                        <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
-                            <div className="flex flex-col gap-2">
-                                <h1 className="text-3xl md:text-5xl font-bold text-[#1e293b] dark:text-white leading-tight tracking-tight">
-                                    {greeting}, {firstName}.
-                                </h1>
-                                <p className="text-gray-500 dark:text-gray-400 text-lg font-light flex items-center gap-2">
-                                    <span className="material-symbols-outlined text-orange-300">local_cafe</span>
-                                    {loading ? 'Loading your library…' : activeLoans.length === 0 ? 'Your shelf is clear — time to explore.' : `${activeLoans.length} book${activeLoans.length > 1 ? 's' : ''} checked out.`}
-                                </p>
+                <main className="flex-1 h-full overflow-y-auto overflow-x-hidden px-6 md:px-12 lg:px-20 py-8 md:py-12 relative z-10">
+                    <div className="max-w-[1440px] mx-auto flex flex-col gap-12 lg:gap-16">
+
+                        {/* Header - Editorial Style */}
+                        <header className="flex flex-col gap-6 animate-fade-in-up delay-100">
+                            <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
+                                <div className="flex flex-col gap-3">
+                                    {/* Small eyebrow label */}
+                                    <p className="text-[#c16549] text-xs font-medium tracking-[0.2em] uppercase"
+                                        style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                        Member Portal
+                                    </p>
+                                    
+                                    {/* Main greeting - Large editorial headline */}
+                                    <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-[#1E1815] dark:text-white leading-[1.1] tracking-tight">
+                                        {greeting},<br className="md:hidden" /> <span className="dotted-accent">{firstName}</span>.
+                                    </h1>
+                                    
+                                    {/* Subtitle with icon */}
+                                    <p className="text-[#6B6560] dark:text-gray-400 text-base md:text-lg font-light flex items-center gap-2.5 mt-1"
+                                        style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                        <span className="material-symbols-outlined text-[#c16549] text-xl">auto_stories</span>
+                                        {loading ? 'Loading your library…' : activeLoans.length === 0 ? 'Your shelf is clear — time to explore.' : `${activeLoans.length} book${activeLoans.length > 1 ? 's' : ''} in your current collection.`}
+                                    </p>
+                                </div>
+                                
+                                {/* Date badge - refined */}
+                                <div className="hidden md:block">
+                                    <span className="text-xs font-medium text-[#6B6560] dark:text-gray-400 bg-white/80 dark:bg-gray-800/80 px-4 py-2 rounded-full border border-[#E8E4DF] dark:border-gray-700 editorial-shadow backdrop-blur-sm tracking-wide"
+                                        style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                        {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                                    </span>
+                                </div>
                             </div>
-                            <div className="hidden md:block">
-                                <span className="text-sm font-medium text-gray-400 bg-white dark:bg-gray-800 px-3 py-1 rounded-full border border-gray-100 dark:border-gray-700 shadow-sm">
-                                    {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-                                </span>
-                            </div>
+                            
+                            {/* Decorative divider line */}
+                            <div className="h-px bg-gradient-to-r from-[#c16549]/30 via-[#c16549]/10 to-transparent w-full max-w-md"></div>
                         </header>
 
                         {loading ? (
-                            <div className="flex items-center justify-center py-24 text-gray-400 animate-pulse text-xl">
+                            <div className="flex flex-col items-center justify-center py-32 text-[#6B6560] text-xl italic">
+                                <span className="material-symbols-outlined text-5xl mb-4 animate-pulse text-[#c16549]">menu_book</span>
                                 Loading your reading world…
                             </div>
                         ) : (
                             <>
                                 {/* Top Layout: Current Read + Sidebar */}
-                                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
+                                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start">
 
-                                    {/* Current Read */}
-                                    <div className="lg:col-span-8 flex flex-col h-full">
-                                        <h2 className="text-lg font-semibold text-[#1e293b] dark:text-gray-200 mb-4 flex items-center gap-2">
-                                            <span className="material-symbols-outlined text-[#2463eb]">menu_book</span>
-                                            Current Read
+                                    {/* Current Read - Editorial Book Display */}
+                                    <div className="lg:col-span-8 flex flex-col h-full animate-fade-in-up delay-200">
+                                        <h2 className="text-sm font-semibold text-[#c16549] tracking-[0.15em] uppercase mb-6"
+                                            style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                            <span className="material-symbols-outlined text-base align-middle mr-1.5">menu_book</span>
+                                            Currently Reading
                                         </h2>
                                         {currentRead ? (
-                                            <div className="relative group bg-white dark:bg-[#1a202c] rounded-2xl p-6 md:p-8 shadow-[0_4px_20px_-2px_rgba(0,0,0,0.05)] flex flex-col md:flex-row gap-8 items-start hover:shadow-lg transition-shadow duration-300 h-full">
-                                                {/* Cover */}
-                                                <div className="relative shrink-0 w-32 md:w-48 aspect-[2/3] rounded-lg shadow-lg rotate-1 group-hover:rotate-0 transition-transform duration-500 ease-out origin-bottom-left overflow-hidden bg-gray-200">
+                                            <div className="relative group bg-white dark:bg-[#2a2622] rounded-sm editorial-shadow-lg flex flex-col md:flex-row gap-8 items-start hover:shadow-2xl transition-all duration-500 overflow-hidden border border-[#E8E4DF] dark:border-[#3d3935] h-full p-8 md:p-10">
+                                                {/* Decorative corner accent */}
+                                                <div className="absolute top-0 left-0 w-20 h-20 border-t-2 border-l-2 border-[#c16549]/20"></div>
+                                                
+                                                {/* Book Cover - Editorial Style */}
+                                                <div className="relative shrink-0 w-40 md:w-56 lg:w-64 aspect-[2/3] rounded-r-lg rounded-l-sm book-shadow rotate-[-1deg] group-hover:rotate-0 transition-transform duration-700 ease-out origin-bottom overflow-hidden bg-[#E8E4DF] border-l-4 border-[#c16549]/30">
                                                     {currentRead.books?.cover_image_url ? (
                                                         <img
                                                             src={currentRead.books.cover_image_url}
@@ -233,50 +306,55 @@ export default function MemberDashboard() {
                                                             className="w-full h-full object-cover"
                                                         />
                                                     ) : (
-                                                        <div className="w-full h-full bg-gradient-to-br from-[#2463eb] to-[#7c3aed] flex items-end p-3">
-                                                            <p className="text-white font-bold italic text-sm leading-tight">{currentRead.books?.title}</p>
+                                                        <div className="w-full h-full bg-gradient-to-br from-[#89332a] to-[#c16549] flex items-end p-4">
+                                                            <p className="text-white font-bold italic text-base leading-tight" style={{ fontFamily: "'Newsreader', serif" }}>{currentRead.books?.title}</p>
                                                         </div>
                                                     )}
-                                                    <div className="absolute inset-0 bg-gradient-to-tr from-black/20 to-transparent rounded-lg" />
+                                                    {/* Book spine highlight */}
+                                                    <div className="absolute left-0 top-0 bottom-0 w-2 bg-gradient-to-r from-white/30 to-transparent"></div>
                                                 </div>
 
-                                                {/* Details */}
+                                                {/* Book Details - Editorial Typography */}
                                                 <div className="flex flex-col justify-between h-full w-full py-2">
                                                     <div>
-                                                        <div className="flex justify-between items-start">
+                                                        <div className="flex justify-between items-start mb-6">
                                                             <div>
-                                                                <h3 className="text-2xl md:text-3xl font-bold text-[#1e293b] dark:text-white mb-2 leading-tight">
+                                                                <h3 className="text-3xl md:text-4xl font-bold text-[#1E1815] dark:text-white mb-3 leading-tight tracking-tight">
                                                                     {currentRead.books?.title}
                                                                 </h3>
-                                                                <p className="text-gray-500 dark:text-gray-400 text-lg italic">
+                                                                <p className="text-[#6B6560] dark:text-gray-400 text-lg italic"
+                                                                    style={{ fontFamily: "'Noto Sans', sans-serif" }}>
                                                                     by {currentRead.books?.author || '—'}
                                                                 </p>
                                                             </div>
                                                         </div>
-                                                        <div className="mt-4 flex items-center gap-3 text-sm text-gray-500 flex-wrap">
+                                                        
+                                                        {/* Metadata - Clean typography */}
+                                                        <div className="mt-6 flex flex-col gap-3 text-sm text-[#6B6560] dark:text-gray-400"
+                                                            style={{ fontFamily: "'Noto Sans', sans-serif" }}>
                                                             {currentRead.books?.category && (
-                                                                <span className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-xs font-semibold uppercase tracking-wide">
-                                                                    {currentRead.books.category}
-                                                                </span>
+                                                                <div className="inline-flex w-fit">
+                                                                    <span className="bg-[#f4ede8] dark:bg-[#3d3935] text-[#c16549] dark:text-[#f4a690] px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-widest border border-[#c16549]/20">
+                                                                        {currentRead.books.category}
+                                                                    </span>
+                                                                </div>
                                                             )}
-                                                            <span className="flex items-center gap-1">
-                                                                <span className="material-symbols-outlined text-[16px]">calendar_today</span>
-                                                                Borrowed: {new Date(currentRead.checkout_date).toLocaleDateString()}
-                                                            </span>
-                                                            <span className="flex items-center gap-1">
-                                                                <span className="material-symbols-outlined text-[16px]">event</span>
-                                                                Due: {new Date(currentRead.due_date).toLocaleDateString()}
-                                                            </span>
-                                                            <DaysLeft dueDate={currentRead.due_date} />
-                                                        </div>
-                                                        {/* Loan Details */}
-                                                        <div className="mt-3 flex items-center gap-3 text-xs text-gray-400">
-                                                            <span className="flex items-center gap-1">
-                                                                <span className="material-symbols-outlined text-[14px]">verified</span>
-                                                                Condition: <span className="capitalize">{currentRead.checkout_condition || 'good'}</span>
-                                                            </span>
+                                                            <div className="flex flex-col gap-2">
+                                                                <span className="flex items-center gap-2">
+                                                                    <span className="material-symbols-outlined text-[16px] text-[#c16549]">calendar_today</span>
+                                                                    Borrowed {new Date(currentRead.checkout_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                                                                </span>
+                                                                <span className="flex items-center gap-2">
+                                                                    <span className="material-symbols-outlined text-[16px] text-[#c16549]">event</span>
+                                                                    Due {new Date(currentRead.due_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                                                                </span>
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="material-symbols-outlined text-[16px] text-[#c16549]">schedule</span>
+                                                                    <DaysLeft dueDate={currentRead.due_date} />
+                                                                </div>
+                                                            </div>
                                                             {currentRead.books?.isbn && (
-                                                                <span className="flex items-center gap-1">
+                                                                <span className="flex items-center gap-2 text-xs">
                                                                     <span className="material-symbols-outlined text-[14px]">qr_code_2</span>
                                                                     ISBN: {currentRead.books.isbn}
                                                                 </span>
@@ -284,21 +362,23 @@ export default function MemberDashboard() {
                                                         </div>
                                                     </div>
 
-                                                    <div className="mt-8 md:mt-auto">
+                                                    <div className="mt-8 md:mt-auto pt-6 border-t border-[#E8E4DF] dark:border-[#3d3935]">
                                                         {/* Status */}
-                                                        <div className="mb-3 text-sm font-medium text-gray-500">
-                                                            Status: <span className={`font-bold ${currentRead.status === 'overdue' || isCurrentReadOverdue ? 'text-red-600' : 'text-emerald-600'}`}>
-                                                                {isCurrentReadOverdue ? 'Overdue' : currentRead.status === 'checked_out' ? 'Checked out' : currentRead.status}
+                                                        <div className="mb-4 text-sm font-medium text-[#6B6560]"
+                                                            style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                                            Status: <span className={`font-bold ${currentRead.status === 'overdue' || isCurrentReadOverdue ? 'text-[#c16549]' : 'text-[#2f5233]'}`}>
+                                                                {isCurrentReadOverdue ? 'Overdue' : currentRead.status === 'checked_out' ? 'Checked Out' : currentRead.status}
                                                             </span>
                                                             {isCurrentReadOverdue && (
-                                                                <span className="ml-2 text-xs text-red-500">
+                                                                <span className="ml-2 text-xs text-[#c16549]">
                                                                     {`(Est. fine: $${currentReadEstimatedFine.toFixed(2)} at $${dailyFineRate.toFixed(2)}/day)`}
                                                                 </span>
                                                             )}
                                                         </div>
                                                         <div className="flex flex-wrap gap-3">
                                                             <Link to="/catalog"
-                                                                className="bg-[#2463eb] hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg text-sm font-medium shadow-md shadow-blue-500/20 transition-all flex items-center gap-2">
+                                                                className="inline-flex items-center gap-2 bg-[#c16549] hover:bg-[#89332a] text-white px-6 py-3 rounded-sm text-sm font-medium editorial-shadow transition-all duration-300 hover:shadow-lg"
+                                                                style={{ fontFamily: "'Noto Sans', sans-serif" }}>
                                                                 <span>Browse More Books</span>
                                                                 <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
                                                             </Link>
@@ -307,71 +387,83 @@ export default function MemberDashboard() {
                                                 </div>
                                             </div>
                                         ) : (
-                                            <div className="bg-white dark:bg-[#1a202c] rounded-2xl p-8 shadow-sm flex flex-col items-center justify-center gap-4 h-full min-h-[260px] text-center">
-                                                <span className="material-symbols-outlined text-6xl text-gray-300">library_books</span>
-                                                <p className="text-gray-500 text-xl font-medium">No books currently checked out.</p>
+                                            <div className="bg-white dark:bg-[#2a2622] rounded-sm editorial-shadow flex flex-col items-center justify-center gap-6 h-full min-h-[320px] text-center p-12 border border-[#E8E4DF] dark:border-[#3d3935]">
+                                                <span className="material-symbols-outlined text-7xl text-[#E8E4DF] dark:text-[#3d3935]">library_books</span>
+                                                <div>
+                                                    <p className="text-[#6B6560] dark:text-gray-400 text-xl font-medium mb-2" style={{ fontFamily: "'Newsreader', serif" }}>No books currently checked out.</p>
+                                                    <p className="text-[#6B6560] dark:text-gray-400 text-sm italic" style={{ fontFamily: "'Noto Sans', sans-serif" }}>Your reading journey awaits.</p>
+                                                </div>
                                                 <Link to="/catalog"
-                                                    className="bg-[#2463eb] text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-blue-700 transition-all">
+                                                    className="bg-[#c16549] text-white px-6 py-3 rounded-sm text-sm font-medium hover:bg-[#89332a] transition-all editorial-shadow"
+                                                    style={{ fontFamily: "'Noto Sans', sans-serif" }}>
                                                     Explore the Catalog
                                                 </Link>
                                             </div>
                                         )}
                                     </div>
 
-                                    {/* Right: Stats + Due Soon */}
-                                    <div className="lg:col-span-4 flex flex-col gap-6 h-full">
-                                        {/* Collection Stats */}
-                                        <div className="bg-white dark:bg-[#1a202c] rounded-2xl p-6 shadow-sm">
-                                            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">Your Library</h3>
-                                            <div className="grid grid-cols-2 gap-3">
+                                    {/* Right: Stats + Due Soon - Editorial Cards */}
+                                    <div className="lg:col-span-4 flex flex-col gap-6 h-full animate-fade-in-up delay-300">
+                                        {/* Collection Stats - Refined Grid */}
+                                        <div className="bg-white dark:bg-[#2a2622] rounded-sm editorial-shadow p-6 border border-[#E8E4DF] dark:border-[#3d3935]">
+                                            <h3 className="text-xs font-semibold text-[#c16549] uppercase tracking-[0.15em] mb-5"
+                                                style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                                Your Library
+                                            </h3>
+                                            <div className="grid grid-cols-2 gap-4">
                                                 {[
-                                                    { icon: 'book_2',      value: totalActive,    label: 'Active Loans' },
-                                                    { icon: 'done_all',    value: totalReturned,  label: 'Returned' },
-                                                    { icon: 'history',     value: totalBorrowed,  label: 'Total Borrows' },
-                                                    { icon: 'warning',     value: overdueCount,   label: 'Overdue', danger: overdueCount > 0 },
-                                                    { icon: 'payments',    value: currentDues, label: 'Current Dues', danger: currentDues > 0, formatCurrency: true },
-                                                ].map(stat => (
-                                                    <div key={stat.label} className={`p-3 rounded-xl flex flex-col gap-1 border ${stat.danger && stat.value > 0 ? 'bg-red-50 border-red-100 dark:bg-red-900/20 dark:border-red-800/30' : 'bg-gray-50 dark:bg-gray-800/50 border-gray-100 dark:border-gray-700'}`}>
-                                                        <span className={`material-symbols-outlined text-[20px] ${stat.danger && stat.value > 0 ? 'text-red-500' : 'text-gray-400'}`}>{stat.icon}</span>
-                                                        <span className={`text-2xl font-bold ${stat.danger && stat.value > 0 ? 'text-red-600' : 'text-[#1e293b] dark:text-white'}`}>
+                                                    { icon: 'book_2',      value: totalActive,    label: 'Active Loans', color: 'text-[#c16549]' },
+                                                    { icon: 'done_all',    value: totalReturned,  label: 'Returned', color: 'text-[#2f5233]' },
+                                                    { icon: 'history',     value: totalBorrowed,  label: 'Total Borrows', color: 'text-[#6B6560]' },
+                                                    { icon: 'warning',     value: overdueCount,   label: 'Overdue', danger: overdueCount > 0, color: overdueCount > 0 ? 'text-[#c16549]' : 'text-[#6B6560]' },
+                                                    { icon: 'payments',    value: currentDues, label: 'Dues', danger: currentDues > 0, formatCurrency: true, color: currentDues > 0 ? 'text-[#c16549]' : 'text-[#2f5233]' },
+                                                ].map((stat, idx) => (
+                                                    <div key={stat.label} className={`p-4 rounded-sm flex flex-col gap-2 border transition-all ${stat.danger && stat.value > 0 ? 'bg-[#fef5f3] border-[#c16549]/20 dark:bg-[#3d2a27] dark:border-[#c16549]/30' : 'bg-[#FAF7F2] dark:bg-[#3d3935] border-[#E8E4DF] dark:border-[#4d4945]'}`}
+                                                        style={{ animationDelay: `${0.4 + idx * 0.05}s` }}>
+                                                        <span className={`material-symbols-outlined text-[18px] ${stat.color}`}>{stat.icon}</span>
+                                                        <span className={`text-2xl font-bold ${stat.danger && stat.value > 0 ? 'text-[#c16549]' : 'text-[#1E1815] dark:text-white'}`}>
                                                             {stat.formatCurrency ? `$${Number.parseFloat(stat.value || 0).toFixed(2)}` : stat.value}
                                                         </span>
-                                                        <span className="text-xs text-gray-500">{stat.label}</span>
+                                                        <span className="text-[10px] text-[#6B6560] dark:text-gray-400 uppercase tracking-wider font-medium"
+                                                            style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                                            {stat.label}
+                                                        </span>
                                                     </div>
                                                 ))}
                                             </div>
                                         </div>
 
-                                        {/* Due Soon Alert */}
+                                        {/* Due Soon Alert - Editorial Style */}
                                         {dueSoonBook ? (
-                                            <div className="bg-white dark:bg-[#1a202c] border-l-4 border-[#7D3C3C] rounded-r-xl shadow-sm p-5 flex flex-col justify-between flex-1">
-                                                <div className="flex justify-between items-start mb-3">
-                                                    <h3 className="text-md font-semibold text-[#7D3C3C] flex items-center gap-2">
-                                                        <span className="material-symbols-outlined text-[20px]">event_busy</span>
+                                            <div className="bg-white dark:bg-[#2a2622] border-l-[3px] border-[#c16549] rounded-r-sm editorial-shadow p-6 flex flex-col justify-between flex-1">
+                                                <div className="flex justify-between items-start mb-4">
+                                                    <h3 className="text-sm font-semibold text-[#c16549] flex items-center gap-2 tracking-wide"
+                                                        style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                                        <span className="material-symbols-outlined text-[18px]">event_busy</span>
                                                         Due Soon
                                                     </h3>
                                                     <DaysLeft dueDate={dueSoonBook.due_date} />
                                                 </div>
                                                 <div className="flex gap-4 items-center">
-                                                    <div className="w-12 h-16 rounded overflow-hidden shrink-0 bg-gray-200">
+                                                    <div className="w-12 h-16 rounded-sm overflow-hidden shrink-0 bg-[#E8E4DF] book-shadow">
                                                         {dueSoonBook.books?.cover_image_url ? (
                                                             <img src={dueSoonBook.books.cover_image_url} alt="" className="w-full h-full object-cover" />
                                                         ) : (
-                                                            <div className="w-full h-full bg-gradient-to-br from-[#7D3C3C] to-[#c0392b]" />
+                                                            <div className="w-full h-full bg-gradient-to-br from-[#89332a] to-[#c16549]" />
                                                         )}
                                                     </div>
                                                     <div>
-                                                        <p className="font-medium text-[#1e293b] dark:text-white leading-tight">{dueSoonBook.books?.title}</p>
-                                                        <p className="text-xs text-gray-500 mt-0.5">{dueSoonBook.books?.author}</p>
+                                                        <p className="font-medium text-[#1E1815] dark:text-white leading-tight text-sm" style={{ fontFamily: "'Newsreader', serif" }}>{dueSoonBook.books?.title}</p>
+                                                        <p className="text-xs text-[#6B6560] dark:text-gray-400 mt-1 italic" style={{ fontFamily: "'Noto Sans', sans-serif" }}>{dueSoonBook.books?.author}</p>
                                                     </div>
                                                 </div>
                                             </div>
                                         ) : (
-                                            <div className="bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 rounded-xl p-5 flex items-center gap-3 flex-1">
-                                                <span className="material-symbols-outlined text-emerald-500 text-3xl">check_circle</span>
+                                            <div className="bg-[#f4f8f4] dark:bg-[#2a3230] border border-[#d4e4d8] dark:border-[#3d4d45] rounded-sm p-6 flex items-center gap-3 flex-1">
+                                                <span className="material-symbols-outlined text-[#2f5233] dark:text-emerald-400 text-3xl">check_circle</span>
                                                 <div>
-                                                    <p className="font-semibold text-emerald-800 dark:text-emerald-400">All clear!</p>
-                                                    <p className="text-sm text-emerald-600">No books due soon.</p>
+                                                    <p className="font-semibold text-[#2f5233] dark:text-emerald-400 text-sm" style={{ fontFamily: "'Newsreader', serif" }}>All clear!</p>
+                                                    <p className="text-xs text-[#6B6560] dark:text-gray-400" style={{ fontFamily: "'Noto Sans', sans-serif" }}>No books due soon.</p>
                                                 </div>
                                             </div>
                                         )}
@@ -380,25 +472,27 @@ export default function MemberDashboard() {
 
                                 {/* Middle: All Active Loans (if more than 1) */}
                                 {activeLoans.length > 1 && (
-                                    <section>
-                                        <h2 className="text-lg font-semibold text-[#1e293b] dark:text-gray-200 mb-4 flex items-center gap-2">
-                                            <span className="material-symbols-outlined text-[#2463eb]">checklist</span>
+                                    <section className="animate-fade-in-up delay-400">
+                                        <h2 className="text-sm font-semibold text-[#c16549] tracking-[0.15em] uppercase mb-6"
+                                            style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                            <span className="material-symbols-outlined text-base align-middle mr-1.5">checklist</span>
                                             All Active Loans
                                         </h2>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                                            {activeLoans.map(loan => (
-                                                <div key={loan.id} className="bg-white dark:bg-[#1a202c] rounded-xl p-4 flex gap-4 shadow-sm border border-gray-100 dark:border-gray-700">
-                                                    <div className="w-10 h-14 rounded overflow-hidden shrink-0 bg-gray-200">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                                            {activeLoans.map((loan, idx) => (
+                                                <div key={loan.id} className="bg-white dark:bg-[#2a2622] rounded-sm p-5 flex gap-4 editorial-shadow border border-[#E8E4DF] dark:border-[#3d3935] hover:shadow-lg transition-all duration-300 group"
+                                                    style={{ animationDelay: `${0.5 + idx * 0.05}s` }}>
+                                                    <div className="w-11 h-16 rounded-sm overflow-hidden shrink-0 bg-[#E8E4DF] book-shadow group-hover:scale-105 transition-transform duration-300">
                                                         {loan.books?.cover_image_url ? (
                                                             <img src={loan.books.cover_image_url} alt="" className="w-full h-full object-cover" />
                                                         ) : (
-                                                            <div className="w-full h-full bg-gradient-to-br from-gray-400 to-gray-600" />
+                                                            <div className="w-full h-full bg-gradient-to-br from-[#6B6560] to-[#89332a]" />
                                                         )}
                                                     </div>
                                                     <div className="flex-1 min-w-0">
-                                                        <p className="font-semibold text-sm truncate">{loan.books?.title}</p>
-                                                        <p className="text-xs text-gray-500 truncate">{loan.books?.author}</p>
-                                                        <p className="text-xs mt-1">
+                                                        <p className="font-semibold text-sm truncate text-[#1E1815] dark:text-white" style={{ fontFamily: "'Newsreader', serif" }}>{loan.books?.title}</p>
+                                                        <p className="text-xs text-[#6B6560] dark:text-gray-400 truncate mt-0.5 italic" style={{ fontFamily: "'Noto Sans', sans-serif" }}>{loan.books?.author}</p>
+                                                        <p className="text-xs mt-2" style={{ fontFamily: "'Noto Sans', sans-serif" }}>
                                                             <DaysLeft dueDate={loan.due_date} />
                                                         </p>
                                                     </div>
@@ -408,47 +502,71 @@ export default function MemberDashboard() {
                                     </section>
                                 )}
 
-                                <section className="bg-white dark:bg-[#1a202c] rounded-2xl p-6 shadow-sm border border-[#e4e8f1] dark:border-gray-700/60 relative overflow-hidden">
-                                    <div className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-[#2463eb] via-[#2c7be5] to-[#4f46e5]" />
-                                    <div className="flex items-center justify-between mb-5">
-                                        <h2 className="text-lg font-semibold text-[#1e293b] dark:text-gray-100 flex items-center gap-2">
-                                            <span className="material-symbols-outlined text-[#2463eb]">receipt_long</span>
+                                <section className="bg-white dark:bg-[#2a2622] rounded-sm editorial-shadow-lg p-8 md:p-10 border border-[#E8E4DF] dark:border-[#3d3935] relative overflow-hidden animate-fade-in-up delay-400">
+                                    {/* Decorative top accent */}
+                                    <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-[#c16549] via-[#89332a] to-[#c16549]" />
+                                    
+                                    <div className="flex items-center justify-between mb-8">
+                                        <h2 className="text-sm font-semibold text-[#c16549] tracking-[0.15em] uppercase flex items-center gap-2"
+                                            style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                            <span className="material-symbols-outlined text-base">receipt_long</span>
                                             Account Center
                                         </h2>
-                                        <span className="text-xs uppercase tracking-[0.12em] text-[#64748b]">Live Member Ledger</span>
+                                        <span className="text-[10px] uppercase tracking-[0.18em] text-[#6B6560] dark:text-gray-400 font-medium"
+                                            style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                            Live Member Ledger
+                                        </span>
                                     </div>
 
-                                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                                        <div className="rounded-xl border border-[#dbe5fb] bg-[#f6f9ff] dark:bg-[#172235] dark:border-[#2b3f63] p-4">
-                                            <div className="flex items-center justify-between mb-3">
-                                                <p className="text-sm font-semibold text-[#1f3a68] dark:text-blue-200">Dues & Reservations</p>
-                                                <p className={`text-lg font-bold ${currentDues > 0 ? 'text-red-600' : 'text-emerald-600'}`}>${currentDues.toFixed(2)}</p>
+                                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                                        {/* Dues & Reservations */}
+                                        <div className="rounded-sm border border-[#d4dfe8]/60 bg-[#f9fbfd] dark:bg-[#2a3138] dark:border-[#3d4550] p-6">
+                                            <div className="flex items-center justify-between mb-4">
+                                                <p className="text-sm font-semibold text-[#1E1815] dark:text-white tracking-wide"
+                                                    style={{ fontFamily: "'Newsreader', serif" }}>
+                                                    Dues & Reservations
+                                                </p>
+                                                <p className={`text-lg font-bold ${currentDues > 0 ? 'text-[#c16549]' : 'text-[#2f5233]'}`}>
+                                                    ${currentDues.toFixed(2)}
+                                                </p>
                                             </div>
-                                            <p className="text-xs text-[#4f648c] dark:text-blue-300 mb-3">Outstanding dues must be cleared before new reservations.</p>
+                                            <p className="text-xs text-[#6B6560] dark:text-gray-400 mb-4 italic"
+                                                style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                                Outstanding dues must be cleared before new reservations.
+                                            </p>
                                             {reservations.length === 0 ? (
-                                                <p className="text-xs text-[#64748b] dark:text-gray-400">No reservations yet.</p>
+                                                <p className="text-xs text-[#6B6560] dark:text-gray-400 italic py-4"
+                                                    style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                                    No reservations yet.
+                                                </p>
                                             ) : (
-                                                <div className="space-y-2">
+                                                <div className="space-y-2.5">
                                                     {reservations.slice(0, 6).map((reservation) => (
-                                                        <div key={reservation.id} className="bg-white/90 dark:bg-[#111827] rounded-lg px-3 py-2 border border-[#e2ebff] dark:border-gray-700">
+                                                        <div key={reservation.id} className="bg-white/90 dark:bg-[#1e2228] rounded-sm px-4 py-3 border border-[#E8E4DF]/60 dark:border-[#3d3935]">
                                                             <div className="flex items-center justify-between gap-3">
                                                                 <div className="min-w-0">
-                                                                    <p className="text-sm font-medium truncate">{reservation.books?.title || 'Untitled Book'}</p>
-                                                                    <p className="text-xs text-[#64748b]">
+                                                                    <p className="text-sm font-medium truncate text-[#1E1815] dark:text-white"
+                                                                        style={{ fontFamily: "'Newsreader', serif" }}>
+                                                                        {reservation.books?.title || 'Untitled Book'}
+                                                                    </p>
+                                                                    <p className="text-xs text-[#6B6560] dark:text-gray-400 mt-0.5"
+                                                                        style={{ fontFamily: "'Noto Sans', sans-serif" }}>
                                                                         {reservation.status === 'pending'
                                                                             ? `Queue #${reservation.position_in_queue || '-'} • Expires ${reservation.expiry_date ? new Date(reservation.expiry_date).toLocaleDateString() : 'N/A'}`
                                                                             : `${reservation.status?.toUpperCase() || 'UNKNOWN'} • ${reservation.updated_at ? new Date(reservation.updated_at).toLocaleDateString() : ''}`}
                                                                     </p>
                                                                 </div>
                                                                 <div className="flex items-center gap-2">
-                                                                    <span className={`text-[10px] uppercase tracking-wide px-2 py-1 rounded-full font-semibold ${reservation.status === 'pending' ? 'bg-blue-100 text-blue-700' : reservation.status === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-700'}`}>
+                                                                    <span className={`text-[10px] uppercase tracking-wide px-2.5 py-1 rounded-full font-semibold ${reservation.status === 'pending' ? 'bg-[#d4dfe8] text-[#1E1815]' : reservation.status === 'cancelled' ? 'bg-[#fef5f3] text-[#c16549]' : 'bg-[#E8E4DF] text-[#6B6560]'}`}
+                                                                        style={{ fontFamily: "'Noto Sans', sans-serif" }}>
                                                                         {reservation.status || 'unknown'}
                                                                     </span>
                                                                     {reservation.status === 'pending' && (
                                                                         <button
                                                                             onClick={() => handleCancelReservation(reservation.id)}
                                                                             disabled={reservationActionId === reservation.id}
-                                                                            className="text-xs px-2.5 py-1 rounded-md bg-red-600 text-white hover:bg-red-700 transition-colors disabled:bg-gray-300"
+                                                                            className="text-xs px-3 py-1.5 rounded-sm bg-[#c16549] text-white hover:bg-[#89332a] transition-colors disabled:bg-[#E8E4DF] disabled:text-[#6B6560] font-medium"
+                                                                            style={{ fontFamily: "'Noto Sans', sans-serif" }}
                                                                         >
                                                                             {reservationActionId === reservation.id ? 'Cancelling...' : 'Cancel'}
                                                                         </button>
@@ -456,7 +574,8 @@ export default function MemberDashboard() {
                                                                 </div>
                                                             </div>
                                                             {reservation.status === 'cancelled' && getStaffCancellationReason(reservation.notes) && (
-                                                                <p className="mt-2 text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 px-2.5 py-1.5 rounded border border-red-100 dark:border-red-800/40">
+                                                                <p className="mt-2.5 text-xs text-[#c16549] dark:text-[#f4a690] bg-[#fef5f3] dark:bg-[#3d2a27] px-3 py-2 rounded-sm border border-[#c16549]/20 italic"
+                                                                    style={{ fontFamily: "'Noto Sans', sans-serif" }}>
                                                                     Admin note: {getStaffCancellationReason(reservation.notes)}
                                                                 </p>
                                                             )}
@@ -466,62 +585,106 @@ export default function MemberDashboard() {
                                             )}
                                         </div>
 
-                                        <div className="rounded-xl border border-[#f4d5d8] bg-[#fff7f8] dark:bg-[#301a1e] dark:border-[#5f2f36] p-4">
-                                            <div className="flex items-center justify-between mb-3">
-                                                <p className="text-sm font-semibold text-[#8b2d3b] dark:text-red-200">Overdue Books</p>
-                                                <p className="text-lg font-bold text-red-600">{overdueLoans.length}</p>
+                                        {/* Overdue Books */}
+                                        <div className="rounded-sm border border-[#f4d5d8]/60 bg-[#fef9fa] dark:bg-[#3d2a27] dark:border-[#c16549]/20 p-6">
+                                            <div className="flex items-center justify-between mb-4">
+                                                <p className="text-sm font-semibold text-[#1E1815] dark:text-white tracking-wide"
+                                                    style={{ fontFamily: "'Newsreader', serif" }}>
+                                                    Overdue Books
+                                                </p>
+                                                <p className="text-lg font-bold text-[#c16549]">{overdueLoans.length}</p>
                                             </div>
                                             {overdueLoans.length === 0 ? (
-                                                <p className="text-xs text-emerald-700 dark:text-emerald-300">No overdue books.</p>
+                                                <p className="text-xs text-[#2f5233] dark:text-emerald-300 italic py-4"
+                                                    style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                                    No overdue books.
+                                                </p>
                                             ) : (
-                                                <div className="space-y-2">
+                                                <div className="space-y-2.5">
                                                     {overdueLoans.slice(0, 4).map((loan) => (
-                                                        <div key={loan.id} className="bg-white/90 dark:bg-[#111827] rounded-lg px-3 py-2 border border-[#f6dde1] dark:border-[#5f2f36]">
-                                                            <p className="text-sm font-medium truncate">{loan.books?.title || 'Untitled Book'}</p>
-                                                            <p className="text-xs text-[#9b4d58] dark:text-red-300">{getOverdueDays(loan.due_date)} days overdue • Est. ${(getOverdueDays(loan.due_date) * dailyFineRate).toFixed(2)}</p>
+                                                        <div key={loan.id} className="bg-white/90 dark:bg-[#1e2228] rounded-sm px-4 py-3 border border-[#E8E4DF]/60 dark:border-[#3d3935]">
+                                                            <p className="text-sm font-medium truncate text-[#1E1815] dark:text-white"
+                                                                style={{ fontFamily: "'Newsreader', serif" }}>
+                                                                {loan.books?.title || 'Untitled Book'}
+                                                            </p>
+                                                            <p className="text-xs text-[#c16549] dark:text-[#f4a690] mt-0.5"
+                                                                style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                                                {getOverdueDays(loan.due_date)} days overdue • Est. ${(getOverdueDays(loan.due_date) * dailyFineRate).toFixed(2)}
+                                                            </p>
                                                         </div>
                                                     ))}
                                                 </div>
                                             )}
                                         </div>
 
-                                        <div className="rounded-xl border border-[#e7e2d1] bg-[#fffdf6] dark:bg-[#29231a] dark:border-[#4f432d] p-4">
-                                            <div className="flex items-center justify-between mb-3">
-                                                <p className="text-sm font-semibold text-[#6a5732] dark:text-amber-200">Past Borrowed Books</p>
-                                                <p className="text-lg font-bold text-[#8a6a2e]">{recentBorrowedBooks.length}</p>
+                                        {/* Past Borrowed Books */}
+                                        <div className="rounded-sm border border-[#e7e2d1]/60 bg-[#fffdf9] dark:bg-[#2a2622] dark:border-[#3d3935] p-6">
+                                            <div className="flex items-center justify-between mb-4">
+                                                <p className="text-sm font-semibold text-[#1E1815] dark:text-white tracking-wide"
+                                                    style={{ fontFamily: "'Newsreader', serif" }}>
+                                                    Past Borrowed Books
+                                                </p>
+                                                <p className="text-lg font-bold text-[#6B6560]">{recentBorrowedBooks.length}</p>
                                             </div>
                                             {recentBorrowedBooks.length === 0 ? (
-                                                <p className="text-xs text-[#6b7280] dark:text-gray-400">No returned books yet.</p>
+                                                <p className="text-xs text-[#6B6560] dark:text-gray-400 italic py-4"
+                                                    style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                                    No returned books yet.
+                                                </p>
                                             ) : (
-                                                <div className="space-y-2">
+                                                <div className="space-y-2.5">
                                                     {recentBorrowedBooks.map((item) => (
-                                                        <div key={item.id} className="bg-white/90 dark:bg-[#111827] rounded-lg px-3 py-2 border border-[#efe8d7] dark:border-[#4f432d] flex items-center justify-between gap-3">
-                                                            <p className="text-sm font-medium truncate">{item.books?.title || 'Untitled Book'}</p>
-                                                            <span className="text-xs text-[#8b8f97]">{new Date(item.checkout_date).toLocaleDateString()}</span>
+                                                        <div key={item.id} className="bg-white/90 dark:bg-[#1e2228] rounded-sm px-4 py-3 border border-[#E8E4DF]/60 dark:border-[#3d3935] flex items-center justify-between gap-3">
+                                                            <p className="text-sm font-medium truncate text-[#1E1815] dark:text-white"
+                                                                style={{ fontFamily: "'Newsreader', serif" }}>
+                                                                {item.books?.title || 'Untitled Book'}
+                                                            </p>
+                                                            <span className="text-xs text-[#6B6560] dark:text-gray-400"
+                                                                style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                                                {new Date(item.checkout_date).toLocaleDateString()}
+                                                            </span>
                                                         </div>
                                                     ))}
                                                 </div>
                                             )}
                                         </div>
 
-                                        <div className="rounded-xl border border-[#d6e8dd] bg-[#f6fffb] dark:bg-[#192822] dark:border-[#2f5143] p-4">
-                                            <div className="flex items-center justify-between mb-3">
-                                                <p className="text-sm font-semibold text-[#245840] dark:text-emerald-200">Financial Transactions</p>
-                                                <p className="text-lg font-bold text-[#1c7f5a]">{financialTransactions.length}</p>
+                                        {/* Financial Transactions */}
+                                        <div className="rounded-sm border border-[#d6e8dd]/60 bg-[#f9fdfb] dark:bg-[#2a3230] dark:border-[#3d4d45] p-6">
+                                            <div className="flex items-center justify-between mb-4">
+                                                <p className="text-sm font-semibold text-[#1E1815] dark:text-white tracking-wide"
+                                                    style={{ fontFamily: "'Newsreader', serif" }}>
+                                                    Financial Transactions
+                                                </p>
+                                                <p className="text-lg font-bold text-[#2f5233]">{financialTransactions.length}</p>
                                             </div>
                                             {financialTransactions.length === 0 ? (
-                                                <p className="text-xs text-[#6b7280] dark:text-gray-400">No financial records available.</p>
+                                                <p className="text-xs text-[#6B6560] dark:text-gray-400 italic py-4"
+                                                    style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                                    No financial records available.
+                                                </p>
                                             ) : (
-                                                <div className="space-y-2">
+                                                <div className="space-y-2.5">
                                                     {financialTransactions.slice(0, 5).map((item) => (
-                                                        <div key={item.id} className="bg-white/90 dark:bg-[#111827] rounded-lg px-3 py-2 border border-[#ddefe5] dark:border-[#2f5143] flex items-center justify-between gap-3">
+                                                        <div key={item.id} className="bg-white/90 dark:bg-[#1e2228] rounded-sm px-4 py-3 border border-[#E8E4DF]/60 dark:border-[#3d3935] flex items-center justify-between gap-3">
                                                             <div className="min-w-0">
-                                                                <p className="text-sm font-medium capitalize truncate">{item.transaction_type || 'transaction'}</p>
-                                                                <p className="text-xs text-[#64748b] truncate">{item.description || 'Ledger entry'}</p>
+                                                                <p className="text-sm font-medium capitalize truncate text-[#1E1815] dark:text-white"
+                                                                    style={{ fontFamily: "'Newsreader', serif" }}>
+                                                                    {item.transaction_type || 'transaction'}
+                                                                </p>
+                                                                <p className="text-xs text-[#6B6560] dark:text-gray-400 truncate mt-0.5"
+                                                                    style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                                                    {item.description || 'Ledger entry'}
+                                                                </p>
                                                             </div>
                                                             <div className="text-right shrink-0">
-                                                                <p className={`text-sm font-bold ${item.transaction_type === 'payment' ? 'text-emerald-600' : 'text-red-600'}`}>${Number.parseFloat(item.amount || 0).toFixed(2)}</p>
-                                                                <p className="text-[11px] text-[#8b8f97]">{item.created_at ? new Date(item.created_at).toLocaleDateString() : ''}</p>
+                                                                <p className={`text-sm font-bold ${item.transaction_type === 'payment' ? 'text-[#2f5233]' : 'text-[#c16549]'}`}>
+                                                                    ${Number.parseFloat(item.amount || 0).toFixed(2)}
+                                                                </p>
+                                                                <p className="text-[10px] text-[#6B6560] dark:text-gray-400"
+                                                                    style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                                                    {item.created_at ? new Date(item.created_at).toLocaleDateString() : ''}
+                                                                </p>
                                                             </div>
                                                         </div>
                                                     ))}
@@ -531,36 +694,52 @@ export default function MemberDashboard() {
                                     </div>
                                 </section>
 
-                                {/* Bottom: History + Recommendations */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                                {/* Bottom: History + Recommendations - Editorial Layout */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 lg:gap-10 animate-fade-in-up delay-400">
                                     {/* Borrowing History */}
-                                    <div className="lg:col-span-2 flex flex-col justify-between bg-white dark:bg-[#1a202c] rounded-2xl p-6 shadow-sm">
-                                        <div className="flex justify-between items-center mb-4">
-                                            <h2 className="text-lg font-semibold text-[#1e293b] dark:text-gray-200">Recent History</h2>
-                                            <Link to="/catalog" className="text-sm text-[#2463eb] hover:text-blue-700 font-medium">Browse Catalog</Link>
+                                    <div className="lg:col-span-2 flex flex-col bg-white dark:bg-[#2a2622] rounded-sm editorial-shadow p-8 border border-[#E8E4DF] dark:border-[#3d3935]">
+                                        <div className="flex justify-between items-center mb-6">
+                                            <h2 className="text-sm font-semibold text-[#c16549] tracking-[0.15em] uppercase"
+                                                style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                                Recent History
+                                            </h2>
+                                            <Link to="/catalog" className="text-xs text-[#c16549] hover:text-[#89332a] font-medium tracking-wide transition-colors underline decoration-dotted underline-offset-4"
+                                                style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                                Browse Catalog
+                                            </Link>
                                         </div>
                                         {history.length === 0 ? (
-                                            <p className="text-gray-400 italic text-sm">No borrowing history yet.</p>
+                                            <p className="text-[#6B6560] dark:text-gray-400 italic text-sm py-8 text-center"
+                                                style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                                No borrowing history yet.
+                                            </p>
                                         ) : (
-                                            <div className="flex flex-col gap-2">
-                                                {history.slice(0, 5).map(tx => (
-                                                    <div key={tx.id} className="flex items-center gap-3 py-2 border-b border-gray-50 dark:border-gray-800 last:border-0">
-                                                        <div className="w-8 h-11 rounded overflow-hidden shrink-0 bg-gray-200">
+                                            <div className="flex flex-col gap-3">
+                                                {history.slice(0, 5).map((tx, idx) => (
+                                                    <div key={tx.id} className="flex items-center gap-4 py-3 border-b border-[#E8E4DF] dark:border-[#3d3935] last:border-0 hover:bg-[#FAF7F2] dark:hover:bg-[#3d3935] transition-colors rounded-sm px-2"
+                                                        style={{ animationDelay: `${0.5 + idx * 0.05}s` }}>
+                                                        <div className="w-9 h-12 rounded-sm overflow-hidden shrink-0 bg-[#E8E4DF] book-shadow">
                                                             {tx.books?.cover_image_url ? (
                                                                 <img src={tx.books.cover_image_url} alt="" className="w-full h-full object-cover" />
                                                             ) : (
-                                                                <div className="w-full h-full bg-gradient-to-br from-gray-300 to-gray-500" />
+                                                                <div className="w-full h-full bg-gradient-to-br from-[#6B6560] to-[#89332a]" />
                                                             )}
                                                         </div>
                                                         <div className="flex-1 min-w-0">
-                                                            <p className="font-medium text-sm truncate">{tx.books?.title}</p>
-                                                            <p className="text-xs text-gray-500">{new Date(tx.checkout_date).toLocaleDateString()}</p>
+                                                            <p className="font-medium text-sm truncate text-[#1E1815] dark:text-white"
+                                                                style={{ fontFamily: "'Newsreader', serif" }}>
+                                                                {tx.books?.title}
+                                                            </p>
+                                                            <p className="text-xs text-[#6B6560] dark:text-gray-400 mt-0.5"
+                                                                style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                                                {new Date(tx.checkout_date).toLocaleDateString()}
+                                                            </p>
                                                         </div>
-                                                        <span className={`text-xs font-bold uppercase px-2 py-0.5 rounded-full ${
-                                                            tx.status === 'returned' ? 'bg-emerald-100 text-emerald-700' :
-                                                            tx.status === 'overdue'  ? 'bg-red-100 text-red-600'      :
-                                                            'bg-blue-100 text-blue-700'
-                                                        }`}>
+                                                        <span className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-full ${
+                                                            tx.status === 'returned' ? 'bg-[#f4f8f4] text-[#2f5233] border border-[#d4e4d8]' :
+                                                            tx.status === 'overdue'  ? 'bg-[#fef5f3] text-[#c16549] border border-[#c16549]/20'      :
+                                                            'bg-[#f9fbfd] text-[#6B6560] border border-[#E8E4DF]'
+                                                        }`} style={{ fontFamily: "'Noto Sans', sans-serif" }}>
                                                             {tx.status === 'checked_out' ? 'Active' : tx.status}
                                                         </span>
                                                     </div>
@@ -569,28 +748,40 @@ export default function MemberDashboard() {
                                         )}
                                     </div>
 
-                                    {/* Recommendations */}
-                                    <div className="flex flex-col bg-white dark:bg-[#1a202c] rounded-2xl p-6 shadow-sm gap-4">
-                                        <h2 className="text-lg font-semibold text-[#1e293b] dark:text-gray-200">You Might Like</h2>
+                                    {/* Recommendations - Editorial Card */}
+                                    <div className="flex flex-col bg-white dark:bg-[#2a2622] rounded-sm editorial-shadow p-8 border border-[#E8E4DF] dark:border-[#3d3935] gap-6">
+                                        <h2 className="text-sm font-semibold text-[#c16549] tracking-[0.15em] uppercase"
+                                            style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                            You Might Like
+                                        </h2>
                                         {recommended.length === 0 ? (
-                                            <p className="text-gray-400 italic text-sm">Explore the catalog to get recommendations.</p>
+                                            <p className="text-[#6B6560] dark:text-gray-400 italic text-sm py-8 text-center"
+                                                style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                                Explore the catalog to get recommendations.
+                                            </p>
                                         ) : (
-                                            <div className="flex flex-col gap-3">
+                                            <div className="flex flex-col gap-4">
                                                 {recommended.slice(0, 4).map((book, idx) => (
                                                     <Link key={book.id || idx} to={`/book/${book.id}`}
-                                                        className="flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg p-1.5 transition-colors">
-                                                        <div className="w-8 h-11 rounded overflow-hidden shrink-0 bg-gray-200">
+                                                        className="group flex items-center gap-3 hover:bg-[#FAF7F2] dark:hover:bg-[#3d3935] rounded-sm p-2 transition-all duration-300">
+                                                        <div className="w-9 h-12 rounded-sm overflow-hidden shrink-0 bg-[#E8E4DF] book-shadow group-hover:scale-105 transition-transform duration-300">
                                                             {book.cover_image_url ? (
                                                                 <img src={book.cover_image_url} alt="" className="w-full h-full object-cover" />
                                                             ) : (
-                                                                <div className="w-full h-full bg-gradient-to-br from-purple-400 to-blue-500" />
+                                                                <div className="w-full h-full bg-gradient-to-br from-[#89332a] to-[#c16549]" />
                                                             )}
                                                         </div>
                                                         <div className="flex-1 min-w-0">
-                                                            <p className="font-medium text-sm truncate">{book.title}</p>
-                                                            <p className="text-xs text-gray-500 truncate">{book.author}</p>
+                                                            <p className="font-medium text-sm truncate text-[#1E1815] dark:text-white group-hover:text-[#c16549] transition-colors"
+                                                                style={{ fontFamily: "'Newsreader', serif" }}>
+                                                                {book.title}
+                                                            </p>
+                                                            <p className="text-xs text-[#6B6560] dark:text-gray-400 truncate italic mt-0.5"
+                                                                style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                                                {book.author}
+                                                            </p>
                                                         </div>
-                                                        <span className="material-symbols-outlined text-[#2463eb] text-[18px] opacity-0 group-hover:opacity-100">arrow_forward</span>
+                                                        <span className="material-symbols-outlined text-[#c16549] text-[18px] opacity-0 group-hover:opacity-100 transition-opacity duration-300">arrow_forward</span>
                                                     </Link>
                                                 ))}
                                             </div>
@@ -601,8 +792,8 @@ export default function MemberDashboard() {
                             </>
                         )}
 
-                        {/* Footer room */}
-                        <div className="h-8" />
+                        {/* Footer spacing - Editorial breathing room */}
+                        <div className="h-16 md:h-24" />
                     </div>
                 </main>
             </div>

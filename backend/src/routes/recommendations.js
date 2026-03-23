@@ -30,14 +30,32 @@ router.get('/popular', async (req, res) => {
                 const ids = txGroups.map(g => g.book_id);
                 const pgBooks = await prisma.books.findMany({
                     where: { id: { in: ids } },
-                    select: { id: true, title: true, author: true, cover_image_url: true, category: true },
+                    select: {
+                        id: true,
+                        title: true,
+                        author: true,
+                        cover_image_url: true,
+                        category: true,
+                        available_copies: true,
+                        publication_year: true,
+                        created_at: true,
+                    },
                 });
                 // Preserve order
                 books = ids.map(id => pgBooks.find(b => b.id === id)).filter(Boolean);
             } else {
                 // No transactions yet, just return recent books
                 books = await prisma.books.findMany({
-                    select: { id: true, title: true, author: true, cover_image_url: true, category: true },
+                    select: {
+                        id: true,
+                        title: true,
+                        author: true,
+                        cover_image_url: true,
+                        category: true,
+                        available_copies: true,
+                        publication_year: true,
+                        created_at: true,
+                    },
                     orderBy: { created_at: 'desc' },
                     take: limit,
                 });
@@ -47,7 +65,16 @@ router.get('/popular', async (req, res) => {
             const ids = books.map(b => b.book_id);
             const pgBooks = await prisma.books.findMany({
                 where: { id: { in: ids } },
-                select: { id: true, title: true, author: true, cover_image_url: true, category: true, available_copies: true },
+                select: {
+                    id: true,
+                    title: true,
+                    author: true,
+                    cover_image_url: true,
+                    category: true,
+                    available_copies: true,
+                    publication_year: true,
+                    created_at: true,
+                },
             });
             books = books.map(b => ({ ...b, ...pgBooks.find(p => p.id === b.book_id) }));
         }
@@ -71,7 +98,16 @@ router.get('/related/:bookId', async (req, res) => {
             if (book?.category) {
                 const fallback = await prisma.books.findMany({
                     where: { category: book.category, id: { not: bookId } },
-                    select: { id: true, title: true, author: true, cover_image_url: true, category: true },
+                    select: {
+                        id: true,
+                        title: true,
+                        author: true,
+                        cover_image_url: true,
+                        category: true,
+                        available_copies: true,
+                        publication_year: true,
+                        created_at: true,
+                    },
                     take: limit,
                 });
                 related = fallback.map(b => ({ ...b, book_id: b.id, reason: 'same_category' }));
@@ -80,7 +116,16 @@ router.get('/related/:bookId', async (req, res) => {
             const ids = related.map(r => r.book_id);
             const pgBooks = await prisma.books.findMany({
                 where: { id: { in: ids } },
-                select: { id: true, title: true, author: true, cover_image_url: true, category: true, available_copies: true },
+                select: {
+                    id: true,
+                    title: true,
+                    author: true,
+                    cover_image_url: true,
+                    category: true,
+                    available_copies: true,
+                    publication_year: true,
+                    created_at: true,
+                },
             });
             related = related.map(r => ({ ...r, ...pgBooks.find(p => p.id === r.book_id) }));
         }
@@ -107,7 +152,16 @@ router.get('/for-member/:memberId', async (req, res) => {
             const borrowedIds = borrowed.map(t => t.book_id);
             const fallback = await prisma.books.findMany({
                 where: { id: { notIn: borrowedIds.length ? borrowedIds : [0] }, available_copies: { gt: 0 } },
-                select: { id: true, title: true, author: true, cover_image_url: true, category: true },
+                select: {
+                    id: true,
+                    title: true,
+                    author: true,
+                    cover_image_url: true,
+                    category: true,
+                    available_copies: true,
+                    publication_year: true,
+                    created_at: true,
+                },
                 take: limit,
                 orderBy: { created_at: 'desc' },
             });
@@ -116,7 +170,16 @@ router.get('/for-member/:memberId', async (req, res) => {
             const ids = recs.map(r => r.book_id);
             const pgBooks = await prisma.books.findMany({
                 where: { id: { in: ids } },
-                select: { id: true, title: true, author: true, cover_image_url: true, category: true, available_copies: true },
+                select: {
+                    id: true,
+                    title: true,
+                    author: true,
+                    cover_image_url: true,
+                    category: true,
+                    available_copies: true,
+                    publication_year: true,
+                    created_at: true,
+                },
             });
             recs = recs.map(r => ({ ...r, ...pgBooks.find(p => p.id === r.book_id) }));
         }
