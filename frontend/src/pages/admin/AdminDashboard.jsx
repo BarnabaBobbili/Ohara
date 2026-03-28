@@ -27,6 +27,7 @@ export default function AdminDashboard() {
     const [overdueBooks, setOverdueBooks] = useState([]);
     const [recentReturns, setRecentReturns] = useState([]);
     const [recentFinancialTransactions, setRecentFinancialTransactions] = useState([]);
+    const [clearingDueMemberId, setClearingDueMemberId] = useState(null);
     const [cancellingReservationId, setCancellingReservationId] = useState(null);
     const [reservationCancelNotes, setReservationCancelNotes] = useState({});
     const [loading, setLoading] = useState(true);
@@ -163,6 +164,43 @@ export default function AdminDashboard() {
         }
     };
 
+    const handleClearDue = async (member) => {
+        const memberId = Number(member?.id);
+        const currentDue = Number.parseFloat(member?.fines || 0);
+        if (!Number.isFinite(memberId) || !Number.isFinite(currentDue) || currentDue <= 0) {
+            alert('This member has no outstanding dues.');
+            return;
+        }
+
+        const amountRaw = window.prompt(
+            `Enter payment amount for ${member.name || `Member #${memberId}`}:`,
+            currentDue.toFixed(2)
+        );
+        if (amountRaw === null) return;
+
+        const amount = Number.parseFloat(amountRaw);
+        if (!Number.isFinite(amount) || amount <= 0) {
+            alert('Please enter a valid amount greater than 0.');
+            return;
+        }
+        if (amount > currentDue) {
+            alert(`Amount cannot exceed current due (${toCurrency(currentDue)}).`);
+            return;
+        }
+
+        setClearingDueMemberId(memberId);
+        try {
+            const result = await financialAPI.processPayment(memberId, amount);
+            const remaining = Number.parseFloat(result?.remaining_balance ?? 0);
+            alert(`Payment processed. Remaining due: ${toCurrency(remaining)}`);
+            await loadData();
+        } catch (error) {
+            alert(error.message || 'Failed to clear due');
+        } finally {
+            setClearingDueMemberId(null);
+        }
+    };
+
     const StatCard = ({ icon, label, value, color }) => (
         <div className="bg-white border border-[#E8E4DF] p-4 hover:border-[#c16549] transition-colors">
             <div className="flex items-center gap-3">
@@ -293,7 +331,16 @@ export default function AdminDashboard() {
                                             <p className="text-sm font-semibold text-[#1E1815] truncate">{member.name}</p>
                                             <p className="text-xs text-[#6B6560] truncate">{member.email || 'No email'}</p>
                                         </div>
-                                        <span className="text-sm font-bold text-red-600">{toCurrency(member.fines)}</span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-sm font-bold text-red-600">{toCurrency(member.fines)}</span>
+                                            <button
+                                                onClick={() => handleClearDue(member)}
+                                                disabled={clearingDueMemberId === member.id}
+                                                className="px-2 py-1 text-[11px] font-medium border border-[#c16549] text-[#c16549] hover:bg-[#c16549] hover:text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                                            >
+                                                {clearingDueMemberId === member.id ? 'Processing...' : 'Clear'}
+                                            </button>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
