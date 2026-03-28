@@ -22,6 +22,9 @@ router.post('/checkout', authenticateToken, requireStaff, async (req, res) => {
         if (!book) {
             return res.status(404).json({ detail: 'Book not found' });
         }
+        if (book.is_reference_only) {
+            return res.status(400).json({ detail: 'Reference-only books cannot be checked out' });
+        }
         if (book.available_copies <= 0) {
             return res.status(400).json({ detail: 'No copies available' });
         }
@@ -47,6 +50,23 @@ router.post('/checkout', authenticateToken, requireStaff, async (req, res) => {
         });
         if (overdueBooks) {
             return res.status(400).json({ detail: 'Member has overdue books' });
+        }
+
+        const existingActiveLoanForSameBook = await prisma.transactions.findFirst({
+            where: {
+                member_id,
+                book_id,
+                status: { in: ['checked_out', 'overdue'] },
+            },
+            select: { id: true, due_date: true, status: true },
+        });
+        if (existingActiveLoanForSameBook) {
+            return res.status(409).json({
+                detail: 'Member already has this book checked out',
+                transaction_id: existingActiveLoanForSameBook.id,
+                due_date: existingActiveLoanForSameBook.due_date,
+                status: existingActiveLoanForSameBook.status,
+            });
         }
 
         const result = await prisma.$transaction(async (tx) => {

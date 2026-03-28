@@ -13,6 +13,12 @@ const invalidateAnalyticsCache = () => {
     invalidateCacheByPrefix('dashboard:', 'reports:', 'activity:');
 };
 
+const parseNonNegativeInteger = (value) => {
+    const parsed = Number.parseInt(value, 10);
+    if (!Number.isFinite(parsed) || parsed < 0) return null;
+    return parsed;
+};
+
 router.get('/', async (req, res) => {
     try {
         const { category, search, genre, language, is_active } = req.query;
@@ -107,6 +113,11 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
             return res.status(400).json({ detail: 'Book with this ISBN already exists' });
         }
 
+        const normalizedTotalCopies = parseNonNegativeInteger(total_copies ?? 1);
+        if (normalizedTotalCopies === null || normalizedTotalCopies < 1) {
+            return res.status(400).json({ detail: 'total_copies must be a positive integer' });
+        }
+
         const book = await prisma.books.create({
             data: {
                 isbn,
@@ -120,8 +131,8 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
                 pages,
                 description,
                 cover_image_url,
-                total_copies: total_copies || 1,
-                available_copies: total_copies || 1,
+                total_copies: normalizedTotalCopies,
+                available_copies: normalizedTotalCopies,
                 location,
                 edition,
                 format: format || 'Hardcover',
@@ -195,6 +206,50 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
 
         if (Object.keys(updateData).length === 0) {
             return res.status(400).json({ detail: 'No fields to update' });
+        }
+
+        // Keep copy counts consistent with active loans to avoid check_available_copies violations.
+        if (updateData.total_copies !== undefined || updateData.available_copies !== undefined) {
+            const activeLoans = await prisma.transactions.count({
+                where: {
+                    book_id: bookId,
+                    status: { in: ['checked_out', 'overdue'] },
+                },
+            });
+
+            const nextTotalRaw = updateData.total_copies !== undefined
+                ? updateData.total_copies
+                : oldBookData.total_copies;
+            const nextTotal = parseNonNegativeInteger(nextTotalRaw);
+
+            if (nextTotal === null || nextTotal < 1) {
+                return res.status(400).json({ detail: 'total_copies must be a positive integer' });
+            }
+
+            if (nextTotal < activeLoans) {
+                return res.status(400).json({
+                    detail: `Cannot reduce total copies below active loans (${activeLoans}). Return some books first.`,
+                });
+            }
+
+            if (updateData.total_copies !== undefined) {
+                updateData.total_copies = nextTotal;
+                updateData.available_copies = nextTotal - activeLoans;
+            } else {
+                const nextAvailable = parseNonNegativeInteger(updateData.available_copies);
+                if (nextAvailable === null) {
+                    return res.status(400).json({ detail: 'available_copies must be a non-negative integer' });
+                }
+                if (nextAvailable > nextTotal) {
+                    return res.status(400).json({ detail: 'available_copies cannot exceed total_copies' });
+                }
+                if (nextAvailable < (nextTotal - activeLoans)) {
+                    return res.status(400).json({
+                        detail: `available_copies is too low for current active loans (${activeLoans})`,
+                    });
+                }
+                updateData.available_copies = nextAvailable;
+            }
         }
 
         // If ISBN is being changed, check for duplicates

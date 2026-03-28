@@ -133,7 +133,39 @@ router.get('/activity/heatmap', asyncHandler(async (req, res) => {
  */
 router.get('/activity/dashboard', asyncHandler(async (req, res) => {
     const days = parseInt(req.query.days, 10) || 7;
-    const dashboard = await activityAnalytics.getActivityDashboard(days);
+    const startDateRaw = req.query.startDate ? String(req.query.startDate) : null;
+    const endDateRaw = req.query.endDate ? String(req.query.endDate) : null;
+
+    const parseDateAt = (raw, endOfDay = false) => {
+        if (!raw) return null;
+        const date = new Date(`${raw}T00:00:00`);
+        if (Number.isNaN(date.getTime())) return null;
+        if (endOfDay) {
+            date.setHours(23, 59, 59, 999);
+        }
+        return date;
+    };
+
+    const startDate = parseDateAt(startDateRaw, false);
+    const endDate = parseDateAt(endDateRaw, true);
+
+    if ((startDateRaw && !startDate) || (endDateRaw && !endDate)) {
+        return res.status(400).json({
+            success: false,
+            error: 'Invalid date format. Use YYYY-MM-DD for startDate/endDate.'
+        });
+    }
+    if (startDate && endDate && startDate > endDate) {
+        return res.status(400).json({
+            success: false,
+            error: 'startDate cannot be after endDate'
+        });
+    }
+
+    const dashboard = await activityAnalytics.getActivityDashboard(days, {
+        startDate,
+        endDate
+    });
     
     res.json({
         success: true,

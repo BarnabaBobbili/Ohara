@@ -134,6 +134,31 @@ export const reportsAPI = {
     getMonthlyTrend:         () => fetchAPI('/reports/monthly-trend',          { headers: getAdminAuthHeaders() }),
 };
 
+// ============= Analytics API (Advanced) =============
+
+export const analyticsAPI = {
+    getActivitySummary: (days = 30) =>
+        fetchAPI(`/analytics/activity/summary?days=${days}`, { headers: getAdminAuthHeaders() }),
+    getActivityDashboard: (params = 7) => {
+        const query = new URLSearchParams();
+
+        if (typeof params === 'number') {
+            query.set('days', String(params));
+        } else {
+            const { days = 7, startDate, endDate } = params || {};
+            if (startDate) query.set('startDate', startDate);
+            if (endDate) query.set('endDate', endDate);
+            if (!startDate && !endDate) query.set('days', String(days));
+        }
+
+        return fetchAPI(`/analytics/activity/dashboard?${query.toString()}`, { headers: getAdminAuthHeaders() });
+    },
+    getCollectionPopularBooks: (days = 90, limit = 20) =>
+        fetchAPI(`/analytics/collection/popular-books?days=${days}&limit=${limit}`, { headers: getAdminAuthHeaders() }),
+    getOverview: (days = 30) =>
+        fetchAPI(`/analytics/overview?days=${days}`, { headers: getAdminAuthHeaders() }),
+};
+
 // ============= Audit Trail API =============
 
 export const auditAPI = {
@@ -361,6 +386,7 @@ export default {
     circulation:     circulationAPI,
     dashboard:       dashboardAPI,
     reports:         reportsAPI,
+    analytics:       analyticsAPI,
     audit:           auditAPI,
     cms:             cmsAPI,
     settings:        settingsAPI,
