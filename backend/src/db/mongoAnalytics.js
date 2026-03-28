@@ -464,21 +464,42 @@ export const getHourlyActivityHeatmap = async (days = 30) => {
  * @param {number} days - Number of days to analyze (default: 7)
  * @returns {Promise<Object>} Dashboard object with multiple metrics
  */
-export const getActivityDashboard = async (days = 7) => {
+export const getActivityDashboard = async (days = 7, range = {}) => {
     try {
         const db = getMongoDatabase();
         if (!db) {
             throw new DatabaseError('MongoDB connection not available');
         }
 
-        const startDate = new Date();
-        startDate.setDate(startDate.getDate() - days);
+        const parseDate = (value) => {
+            if (!value) return null;
+            const parsed = new Date(value);
+            return Number.isNaN(parsed.getTime()) ? null : parsed;
+        };
+
+        const rangeStart = parseDate(range?.startDate);
+        const rangeEnd = parseDate(range?.endDate);
+
+        let startDate;
+        let endDate;
+        if (rangeStart && rangeEnd) {
+            startDate = rangeStart;
+            endDate = rangeEnd;
+        } else {
+            endDate = new Date();
+            startDate = new Date();
+            startDate.setDate(startDate.getDate() - days);
+        }
+
+        if (startDate > endDate) {
+            throw new DatabaseError('Invalid date range: startDate cannot be after endDate');
+        }
 
         const pipeline = [
             // Stage 1: Filter by date range
             {
                 $match: {
-                    timestamp: { $gte: startDate }
+                    timestamp: { $gte: startDate, $lte: endDate }
                 }
             },
             // Stage 2: Facet - run multiple pipelines in parallel
@@ -572,11 +593,13 @@ export const getActivityDashboard = async (days = 7) => {
         const facetResult = results[0];
 
         return {
-            period: `Last ${days} days`,
+            period: rangeStart && rangeEnd
+                ? `${formatDateIndian(startDate)} to ${formatDateIndian(endDate)}`
+                : `Last ${days} days`,
             startDate,
             startDate_formatted: formatDateIndian(startDate),
-            endDate: new Date(),
-            endDate_formatted: formatDateIndian(new Date()),
+            endDate,
+            endDate_formatted: formatDateIndian(endDate),
             totalActivities: facetResult.totalActivities[0]?.total || 0,
             totalActivities_formatted: formatNumberIndian(facetResult.totalActivities[0]?.total || 0),
             actionBreakdown: facetResult.actionBreakdown.map(item => ({

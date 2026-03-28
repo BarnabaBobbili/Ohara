@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { booksAPI, collectionsAPI } from '../../services/api';
+import { booksAPI } from '../../services/api';
 
 export default function BookManagement() {
     const [books, setBooks] = useState([]);
@@ -8,6 +8,7 @@ export default function BookManagement() {
     const [showModal, setShowModal] = useState(false);
     const [editingBook, setEditingBook] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [statusFilter, setStatusFilter] = useState('all');
     const [formData, setFormData] = useState({
         title: '', author: '', isbn: '', genre: '', description: '',
         cover_image_url: '', publication_year: '', publisher: '', total_copies: 1,
@@ -17,9 +18,32 @@ export default function BookManagement() {
 
     useEffect(() => { loadBooks(); }, []);
 
+    const loadAllBooksForAdmin = async () => {
+        const PAGE_SIZE = 100;
+        const MAX_SKIP = 5000;
+        const allBooks = [];
+        let skip = 0;
+
+        while (true) {
+            const chunk = await booksAPI.getAll({
+                is_active: 'false', // include active + inactive for admin archives
+                limit: PAGE_SIZE,
+                skip,
+            });
+            const rows = Array.isArray(chunk) ? chunk : [];
+            allBooks.push(...rows);
+
+            if (rows.length < PAGE_SIZE) break;
+            if (skip >= MAX_SKIP) break;
+            skip += PAGE_SIZE;
+        }
+
+        return allBooks;
+    };
+
     const loadBooks = async () => {
         try {
-            const data = await booksAPI.getAll();
+            const data = await loadAllBooksForAdmin();
             setBooks(Array.isArray(data) ? data : []);
         } catch (error) {
             console.error('Failed to load books:', error);
@@ -92,10 +116,18 @@ export default function BookManagement() {
         setEditingBook(null);
     };
 
-    const filtered = books.filter(b => 
-        b.title?.toLowerCase().includes(search.toLowerCase()) ||
-        b.author?.toLowerCase().includes(search.toLowerCase())
-    );
+    const filtered = books.filter((b) => {
+        const matchesSearch =
+            b.title?.toLowerCase().includes(search.toLowerCase()) ||
+            b.author?.toLowerCase().includes(search.toLowerCase());
+
+        const matchesStatus =
+            statusFilter === 'all' ||
+            (statusFilter === 'active' && b.is_active) ||
+            (statusFilter === 'inactive' && !b.is_active);
+
+        return matchesSearch && matchesStatus;
+    });
 
     if (loading) {
         return (
@@ -134,6 +166,15 @@ export default function BookManagement() {
                         className="w-full pl-10 pr-4 py-2 border border-[#E8E4DF] bg-white text-sm focus:border-[#c16549] focus:outline-none"
                     />
                 </div>
+                <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    className="px-3 py-2 border border-[#E8E4DF] bg-white text-sm focus:border-[#c16549] focus:outline-none"
+                >
+                    <option value="all">All</option>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                </select>
                 <div className="flex border border-[#E8E4DF] bg-white">
                     <button onClick={() => setView('grid')} className={`p-2 ${view === 'grid' ? 'bg-[#c16549] text-white' : 'text-[#6B6560] hover:bg-[#FAF7F2]'}`}>
                         <span className="material-symbols-outlined text-lg">grid_view</span>

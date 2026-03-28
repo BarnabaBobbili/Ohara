@@ -16,6 +16,12 @@ const toCurrency = (value) => `$${Number.parseFloat(value || 0).toFixed(2)}`;
 export default function AdminDashboard() {
     const [stats, setStats] = useState({ books: 0, members: 0, checkouts: 0, overdue: 0, reservations: 0 });
     const [activities, setActivities] = useState([]);
+    const [activityTotal, setActivityTotal] = useState(0);
+    const [activitySearch, setActivitySearch] = useState('');
+    const [activityActionFilter, setActivityActionFilter] = useState('all');
+    const [showAllActivities, setShowAllActivities] = useState(false);
+    const [allActivitiesLoaded, setAllActivitiesLoaded] = useState(false);
+    const [activityLoadingMore, setActivityLoadingMore] = useState(false);
     const [pendingReservations, setPendingReservations] = useState([]);
     const [membersWithDues, setMembersWithDues] = useState([]);
     const [overdueBooks, setOverdueBooks] = useState([]);
@@ -33,7 +39,7 @@ export default function AdminDashboard() {
         try {
             const [statsData, activityData, reservationData, fineReportData, overdueData, returnsData, financialData] = await Promise.all([
                 dashboardAPI.getStats().catch(() => ({})),
-                reportsAPI.getActivityLogs({ limit: 10 }).catch(() => ({ logs: [] })),
+                reportsAPI.getActivityLogs({ limit: 50, skip: 0 }).catch(() => ({ logs: [], total: 0 })),
                 reservationsAPI.getAll({ status: 'pending', limit: 8 }).catch(() => []),
                 reportsAPI.getFineReport().catch(() => ({})),
                 circulationAPI.getOverdue().catch(() => []),
@@ -47,7 +53,11 @@ export default function AdminDashboard() {
                 overdue: statsData?.books_overdue || 0,
                 reservations: statsData?.active_reservations || 0,
             });
-            setActivities(Array.isArray(activityData?.logs) ? activityData.logs.slice(0, 5) : []);
+            const activityLogs = Array.isArray(activityData?.logs) ? activityData.logs : [];
+            setActivities(activityLogs);
+            setActivityTotal(Number.isFinite(activityData?.total) ? activityData.total : activityLogs.length);
+            setAllActivitiesLoaded(false);
+            setShowAllActivities(false);
             setPendingReservations(Array.isArray(reservationData) ? reservationData : []);
             setMembersWithDues(Array.isArray(fineReportData?.members_with_fines) ? fineReportData.members_with_fines : []);
             setOverdueBooks(Array.isArray(overdueData) ? overdueData : []);
@@ -59,6 +69,69 @@ export default function AdminDashboard() {
             setLoading(false);
         }
     };
+
+    const loadAllActivities = async () => {
+        if (activityLoadingMore || allActivitiesLoaded) return;
+
+        setActivityLoadingMore(true);
+        try {
+            const PAGE_SIZE = 200;
+            const MAX_SKIP = 5000;
+            const allLogs = [];
+            let skip = 0;
+            let total = 0;
+
+            while (true) {
+                const response = await reportsAPI.getActivityLogs({ limit: PAGE_SIZE, skip }).catch(() => ({ logs: [], total: 0 }));
+                const logs = Array.isArray(response?.logs) ? response.logs : [];
+                total = Number.isFinite(response?.total) ? response.total : total;
+                allLogs.push(...logs);
+
+                if (logs.length < PAGE_SIZE) break;
+                if (skip >= MAX_SKIP) break;
+                if (total > 0 && allLogs.length >= total) break;
+                skip += PAGE_SIZE;
+            }
+
+            setActivities(allLogs);
+            setActivityTotal(total || allLogs.length);
+            setAllActivitiesLoaded(true);
+        } finally {
+            setActivityLoadingMore(false);
+        }
+    };
+
+    const activityActionOptions = [...new Set(
+        activities
+            .map((activity) => (activity?.action || '').toLowerCase())
+            .filter(Boolean)
+    )];
+
+    const filteredActivities = activities.filter((activity) => {
+        const actionValue = (activity?.action || '').toLowerCase();
+        if (activityActionFilter !== 'all' && actionValue !== activityActionFilter) return false;
+
+        const query = activitySearch.trim().toLowerCase();
+        if (!query) return true;
+
+        const searchable = [
+            activity?.action,
+            activity?.book_title,
+            activity?.book_isbn,
+            activity?.member_name,
+            activity?.performed_by,
+            activity?.entity_type,
+        ]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase();
+
+        return searchable.includes(query);
+    });
+
+    const visibleActivities = showAllActivities
+        ? filteredActivities
+        : filteredActivities.slice(0, 5);
 
     const handleCancelReservation = async (reservationId) => {
         if (!reservationId) return;
@@ -305,12 +378,48 @@ export default function AdminDashboard() {
             {/* Quick Actions & Recent Activity */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 bg-white border border-[#E8E4DF] p-5">
-                    <h2 className="text-lg font-bold text-[#1E1815] mb-4">Recent Activity</h2>
-                    {activities.length === 0 ? (
+                    <div className="flex flex-col gap-3 mb-4">
+                        <h2 className="text-lg font-bold text-[#1E1815]">Recent Activity</h2>
+                        <div className="flex flex-col md:flex-row gap-2">
+                            <input
+                                type="text"
+                                value={activitySearch}
+                                onChange={(event) => setActivitySearch(event.target.value)}
+                                placeholder="Search action, book, ISBN, member, user..."
+                                className="flex-1 px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none"
+                            />
+                            <select
+                                value={activityActionFilter}
+                                onChange={(event) => setActivityActionFilter(event.target.value)}
+                                className="px-3 py-2 border border-[#E8E4DF] text-sm focus:border-[#c16549] focus:outline-none"
+                            >
+                                <option value="all">All actions</option>
+                                {activityActionOptions.map((action) => (
+                                    <option key={action} value={action}>{action.replace(/_/g, ' ')}</option>
+                                ))}
+                            </select>
+                            <button
+                                onClick={async () => {
+                                    if (!showAllActivities && !allActivitiesLoaded) {
+                                        await loadAllActivities();
+                                    }
+                                    setShowAllActivities((prev) => !prev);
+                                }}
+                                className="px-3 py-2 bg-[#c16549] text-white text-sm font-medium hover:bg-[#a85443] transition-colors disabled:bg-gray-300"
+                                disabled={activityLoadingMore}
+                            >
+                                {activityLoadingMore ? 'Loading...' : (showAllActivities ? 'Show Top 5' : 'Show All')}
+                            </button>
+                        </div>
+                        <p className="text-xs text-[#6B6560]">
+                            Showing {visibleActivities.length} of {filteredActivities.length} filtered logs ({activityTotal} total)
+                        </p>
+                    </div>
+                    {filteredActivities.length === 0 ? (
                         <p className="text-sm text-[#6B6560]">No recent activity</p>
                     ) : (
                         <div className="space-y-3">
-                            {activities.map((activity, i) => {
+                            {visibleActivities.map((activity, i) => {
                                 const action = activity.action?.toLowerCase() || '';
                                 const icon = action.includes('create') || action.includes('add') ? 'add_circle' :
                                              action.includes('delete') || action.includes('remove') ? 'delete' :
@@ -320,7 +429,7 @@ export default function AdminDashboard() {
                                 const actionLabel = activity.action?.replace(/_/g, ' ').toUpperCase() || 'ACTIVITY';
                                 
                                 return (
-                                    <div key={i} className="flex items-start gap-3 pb-3 border-b border-[#E8E4DF] last:border-0">
+                                    <div key={`${activity.timestamp || 'ts'}-${activity.action || 'act'}-${i}`} className="flex items-start gap-3 pb-3 border-b border-[#E8E4DF] last:border-0">
                                         <div className="w-8 h-8 bg-[#FAF7F2] rounded-full flex items-center justify-center">
                                             <span className="material-symbols-outlined text-sm text-[#c16549]">{icon}</span>
                                         </div>

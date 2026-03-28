@@ -41,6 +41,29 @@ const readNumericSetting = (sources, keys, fallback) => {
     return fallback;
 };
 
+const fetchAllPaged = async (fetchFn, baseParams = {}) => {
+    const PAGE_SIZE = 100;
+    const MAX_SKIP = 5000;
+    const records = [];
+    let skip = 0;
+
+    while (true) {
+        const response = await fetchFn({
+            ...baseParams,
+            limit: PAGE_SIZE,
+            skip,
+        });
+        const rows = Array.isArray(response) ? response : [];
+        records.push(...rows);
+
+        if (rows.length < PAGE_SIZE) break;
+        if (skip >= MAX_SKIP) break;
+        skip += PAGE_SIZE;
+    }
+
+    return records;
+};
+
 export default function CirculationDesk() {
     const [tab, setTab] = useState('checkout');
     const [loans, setLoans] = useState([]);
@@ -108,10 +131,14 @@ export default function CirculationDesk() {
 
     const loadData = async () => {
         try {
+            const loansPromise = circulationAPI.getActive().catch(() => []);
+            const booksPromise = fetchAllPaged(booksAPI.getAll, { is_active: 'true' }).catch(() => []);
+            const membersPromise = fetchAllPaged(membersAPI.getAll, {}).catch(() => []);
+
             const [loansData, booksData, membersData] = await Promise.all([
-                circulationAPI.getActive().catch(() => []),
-                booksAPI.getAll().catch(() => []),
-                membersAPI.getAll().catch(() => [])
+                loansPromise,
+                booksPromise,
+                membersPromise,
             ]);
             setLoans(Array.isArray(loansData) ? loansData : []);
             setBooks(Array.isArray(booksData) ? booksData : []);
@@ -139,6 +166,10 @@ export default function CirculationDesk() {
     // Confirm checkout with condition
     const handleCheckout = async () => {
         if (!selectedMember || !selectedBook) return;
+        if (selectedBook.is_reference_only) {
+            alert('Reference-only books cannot be checked out.');
+            return;
+        }
         
         setProcessing(true);
         try {
@@ -213,8 +244,7 @@ export default function CirculationDesk() {
         m.email?.toLowerCase().includes(memberSearch.toLowerCase())
     );
 
-    const availableBooks = books.filter(b => (b.available_copies || 0) > 0);
-    const filteredBooks = availableBooks.filter(b => 
+    const filteredBooks = books.filter(b => 
         b.title?.toLowerCase().includes(bookSearch.toLowerCase()) ||
         b.author?.toLowerCase().includes(bookSearch.toLowerCase()) ||
         b.isbn?.toLowerCase().includes(bookSearch.toLowerCase())
@@ -286,7 +316,8 @@ export default function CirculationDesk() {
                             </div>
                         ) : (
                             <div className="max-h-48 overflow-y-auto space-y-1">
-                                {filteredMembers.slice(0, 10).map(m => (
+                                <p className="text-[11px] text-[#6B6560] px-2">{filteredMembers.length} matches</p>
+                                {filteredMembers.map(m => (
                                     <button key={m.id} onClick={() => setSelectedMember(m)} className="w-full text-left p-2 hover:bg-[#FAF7F2] border border-transparent hover:border-[#E8E4DF]">
                                         <p className="text-sm font-medium text-[#1E1815]">{m.name}</p>
                                         <p className="text-xs text-[#6B6560]">{m.email}</p>
@@ -318,32 +349,58 @@ export default function CirculationDesk() {
                                     {selectedBook.cover_image_url && (
                                         <img src={selectedBook.cover_image_url} alt="" className="w-10 h-14 object-cover rounded" />
                                     )}
-                                    <div>
-                                        <p className="text-sm font-medium text-[#1E1815]">{selectedBook.title}</p>
-                                        <p className="text-xs text-[#6B6560]">{selectedBook.author}</p>
-                                        <p className="text-xs text-green-600">{selectedBook.available_copies} available</p>
-                                    </div>
+                                <div>
+                                    <p className="text-sm font-medium text-[#1E1815]">{selectedBook.title}</p>
+                                    <p className="text-xs text-[#6B6560]">{selectedBook.author}</p>
+                                    <p className={`text-xs ${selectedBook.is_reference_only ? 'text-amber-700' : ((selectedBook.available_copies || 0) > 0 ? 'text-green-600' : 'text-red-600')}`}>
+                                        {selectedBook.is_reference_only
+                                            ? 'Reference only'
+                                            : ((selectedBook.available_copies || 0) > 0 ? `${selectedBook.available_copies} available` : 'No copies available')}
+                                    </p>
                                 </div>
-                                <button onClick={() => setSelectedBook(null)} className="text-red-500 hover:text-red-600">
-                                    <span className="material-symbols-outlined text-lg">close</span>
-                                </button>
+                            </div>
+                            <button onClick={() => setSelectedBook(null)} className="text-red-500 hover:text-red-600">
+                                <span className="material-symbols-outlined text-lg">close</span>
+                            </button>
                             </div>
                         ) : (
                             <div className="max-h-48 overflow-y-auto space-y-1">
-                                {filteredBooks.slice(0, 10).map(b => (
-                                    <button key={b.id} onClick={() => setSelectedBook(b)} className="w-full text-left p-2 hover:bg-[#FAF7F2] border border-transparent hover:border-[#E8E4DF] flex items-center gap-3">
+                                <p className="text-[11px] text-[#6B6560] px-2">{filteredBooks.length} matches</p>
+                                {filteredBooks.map((b) => {
+                                    const isSelectable = (b.available_copies || 0) > 0 && !b.is_reference_only;
+                                    const availabilityText = b.is_reference_only
+                                        ? 'Reference only'
+                                        : ((b.available_copies || 0) > 0 ? `${b.available_copies} available` : 'No copies available');
+                                    const availabilityClass = b.is_reference_only
+                                        ? 'text-amber-700'
+                                        : ((b.available_copies || 0) > 0 ? 'text-green-600' : 'text-red-600');
+
+                                    return (
+                                    <button
+                                        key={b.id}
+                                        onClick={() => setSelectedBook(b)}
+                                        disabled={!isSelectable}
+                                        className={`w-full text-left p-2 border border-transparent flex items-center gap-3 ${
+                                            isSelectable
+                                                ? 'hover:bg-[#FAF7F2] hover:border-[#E8E4DF]'
+                                                : 'opacity-60 cursor-not-allowed bg-[#FAF7F2]'
+                                        }`}
+                                    >
                                         {b.cover_image_url && (
                                             <img src={b.cover_image_url} alt="" className="w-8 h-12 object-cover rounded" />
                                         )}
                                         <div>
                                             <p className="text-sm font-medium text-[#1E1815]">{b.title}</p>
                                             <p className="text-xs text-[#6B6560]">{b.author}</p>
-                                            <p className="text-xs text-green-600">{b.available_copies} available</p>
+                                            <p className={`text-xs ${availabilityClass}`}>
+                                                {availabilityText}
+                                            </p>
                                         </div>
                                     </button>
-                                ))}
+                                    );
+                                })}
                                 {filteredBooks.length === 0 && bookSearch && (
-                                    <p className="text-sm text-[#6B6560] p-2">No available books found</p>
+                                    <p className="text-sm text-[#6B6560] p-2">No books found</p>
                                 )}
                             </div>
                         )}
