@@ -31,6 +31,10 @@ import staffBoardRouter from './routes/staff_board.js';
 import ebooksRouter from './routes/ebooks.js';
 import announcementsRouter from './routes/announcements.js';
 import newsRouter from './routes/news.js';
+import analyticsRouter from './routes/analytics.js';
+import jobsRouter from './routes/jobs.js';
+import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
+import { startScheduledJobs, stopScheduledJobs, getJobStatus } from './jobs/jobScheduler.js';
 
 dotenv.config();
 
@@ -88,6 +92,7 @@ app.get('/health', async (req, res) => {
             postgres_pool: getPostgresPoolStats(),
             log_queue: getLogQueueStats(),
             cache: getCacheStats(),
+            scheduled_jobs: getJobStatus()
         });
     } catch (error) {
         res.status(500).json({
@@ -115,17 +120,14 @@ app.use('/api/staff-board', staffBoardRouter);
 app.use('/api/ebooks', ebooksRouter);
 app.use('/api/announcements', announcementsRouter);
 app.use('/api/news', newsRouter);
+app.use('/api/analytics', analyticsRouter);
+app.use('/api/jobs', jobsRouter);
 
-app.use((err, req, res, next) => {
-    console.error('Error:', err);
-    res.status(err.status || 500).json({
-        detail: err.message || 'Internal Server Error',
-    });
-});
+// 404 handler - must be after all routes
+app.use(notFoundHandler);
 
-app.use((req, res) => {
-    res.status(404).json({ detail: 'Not Found' });
-});
+// Global error handler - must be last middleware
+app.use(errorHandler);
 
 const startServer = async () => {
     console.log('='.repeat(60));
@@ -176,6 +178,13 @@ const startServer = async () => {
         console.log('Created uploads directory');
     }
 
+    // Start scheduled jobs
+    try {
+        startScheduledJobs();
+    } catch (error) {
+        console.error('Note: Failed to start scheduled jobs:', error.message);
+    }
+
     app.listen(PORT, '0.0.0.0', () => {
         console.log('='.repeat(60));
         console.log('Library Management System API (Prisma ORM)');
@@ -187,6 +196,14 @@ const startServer = async () => {
 
 const shutdown = async () => {
     console.log('\nShutting down gracefully...');
+    
+    // Stop scheduled jobs first
+    try {
+        stopScheduledJobs();
+    } catch (error) {
+        console.error('Error stopping scheduled jobs:', error.message);
+    }
+    
     await Promise.allSettled([
         prisma.$disconnect(),
         closePostgresPool(),
@@ -196,6 +213,21 @@ const shutdown = async () => {
     ]);
     process.exit(0);
 };
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+    // Log but don't crash in production
+    if (process.env.NODE_ENV !== 'production') {
+        shutdown();
+    }
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+    console.error('❌ Uncaught Exception:', error);
+    shutdown();
+});
 
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
