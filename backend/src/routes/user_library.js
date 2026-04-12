@@ -5,6 +5,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import prisma from '../db/prisma.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { syncEbookToNeo4j } from '../db/neo4j.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -58,9 +59,20 @@ router.post('/upload', authenticateToken, upload.single('file'), async (req, res
                 author: author || 'Unknown',
                 file_path: file.path,
                 file_format: path.extname(file.originalname).replace('.', ''),
-                file_size: file.size,
+                file_size_bytes: BigInt(file.size),
             }
         });
+
+        // Sync member-uploaded ebook to Neo4j (non-blocking)
+        syncEbookToNeo4j({
+            id: book.id,
+            title: book.title,
+            author: book.author || '',
+            is_public: false,
+            file_format: book.file_format || '',
+            uploaded_by_type: 'member',
+            book_id: null,
+        }).catch(() => {});
 
         res.status(201).json(book);
     } catch (error) {

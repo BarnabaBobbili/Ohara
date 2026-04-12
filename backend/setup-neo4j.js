@@ -72,6 +72,12 @@ async function setupNeo4j() {
         `);
         console.log('✓ Constraint: Category.name (unique)');
 
+        // New constraints for Ebook and Tag nodes
+        await session.run('CREATE CONSTRAINT ebook_id_unique IF NOT EXISTS FOR (e:Ebook) REQUIRE e.id IS UNIQUE');
+        await session.run('CREATE CONSTRAINT tag_name_unique IF NOT EXISTS FOR (t:Tag) REQUIRE t.name IS UNIQUE');
+        await session.run('CREATE INDEX ebook_title_idx IF NOT EXISTS FOR (e:Ebook) ON (e.title)');
+        await session.run('CREATE INDEX book_category_idx IF NOT EXISTS FOR (b:Book) ON (b.category)');
+
         // ============================================================
         // 2. CREATE INDEXES FOR PERFORMANCE
         // ============================================================

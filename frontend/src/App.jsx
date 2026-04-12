@@ -23,6 +23,9 @@ import AuditTrail from './pages/admin/AuditTrail';
 import CMSManager from './pages/admin/CMSManager';
 import EbookManager from './pages/admin/EbookManager';
 import ContentManager from './pages/admin/ContentManager';
+import ReviewModeration from './pages/admin/ReviewModeration';
+import WishlistPage from './pages/WishlistPage';
+import EbookLibrary from './pages/EbookLibrary';
 
 import './index.css';
 
@@ -45,6 +48,8 @@ function App() {
         <Route path="/catalogue" element={<BookCatalog />} />
         <Route path="/book-reader" element={<BookReader />} />
         <Route path="/collections" element={<CollectionsPage />} />
+        <Route path="/wishlist" element={<WishlistPage />} />
+        <Route path="/ebooks" element={<EbookLibrary />} />
 
         {/* Admin Routes */}
         <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
@@ -56,6 +61,7 @@ function App() {
           <Route path="reports" element={<Reports />} />
           <Route path="cms" element={<CMSManager />} />
           <Route path="ebooks" element={<EbookManager />} />
+          <Route path="reviews" element={<ReviewModeration />} />
           <Route path="content" element={<ContentManager />} />
           <Route path="settings" element={<Settings />} />
         </Route>

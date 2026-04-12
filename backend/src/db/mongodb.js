@@ -38,6 +38,19 @@ const ensureMongoIndexes = async (database) => {
         const analytics = database.collection('analytics');
         await safeCreateIndex(analytics, { type: 1, timestamp: -1 }, { name: 'idx_type_timestamp', background: true });
         await safeCreateIndex(analytics, { timestamp: -1 }, { name: 'idx_analytics_timestamp', background: true });
+
+        // Reviews
+        const reviews = database.collection('reviews');
+        await safeCreateIndex(reviews, { book_id: 1, created_at: -1 }, { name: 'idx_reviews_book_date', background: true });
+        await safeCreateIndex(reviews, { member_id: 1 }, { name: 'idx_reviews_member', background: true });
+        await safeCreateIndex(reviews, { status: 1 }, { name: 'idx_reviews_status', background: true });
+        await safeCreateIndex(reviews, { book_id: 1, member_id: 1 }, { unique: true, name: 'idx_reviews_book_member_unique', background: true });
+        await safeCreateIndex(reviews, { likes_count: -1 }, { name: 'idx_reviews_popular', background: true });
+
+        // Review reactions
+        const reactions = database.collection('review_reactions');
+        await safeCreateIndex(reactions, { review_id: 1, member_id: 1 }, { unique: true, name: 'idx_reactions_unique', background: true });
+        await safeCreateIndex(reactions, { review_id: 1 }, { name: 'idx_reactions_review', background: true });
         
         console.log('✓ MongoDB indexes verified');
     } catch (error) {

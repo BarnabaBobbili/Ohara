@@ -19,6 +19,69 @@ const parseNonNegativeInteger = (value) => {
     return parsed;
 };
 
+const isMissingBookRatingsTableError = (error) => {
+    if (!error) return false;
+    if (error.code === 'P2021') return true;
+    const message = String(error.message || '').toLowerCase();
+    return message.includes('book_ratings') && (
+        message.includes('does not exist') ||
+        message.includes('not exist') ||
+        message.includes('table')
+    );
+};
+
+const attachRatingMetadata = async (items) => {
+    const books = Array.isArray(items) ? items : [items].filter(Boolean);
+    if (books.length === 0) return Array.isArray(items) ? [] : null;
+
+    const bookIds = [...new Set(
+        books
+            .map((book) => Number.parseInt(book?.id, 10))
+            .filter((bookId) => Number.isInteger(bookId))
+    )];
+
+    if (bookIds.length === 0) {
+        const fallback = books.map((book) => ({ ...book, avg_rating: 0, rating_count: 0 }));
+        return Array.isArray(items) ? fallback : fallback[0];
+    }
+
+    let aggregates = [];
+    try {
+        aggregates = await prisma.book_ratings.groupBy({
+            by: ['book_id'],
+            where: { book_id: { in: bookIds } },
+            _avg: { rating: true },
+            _count: { rating: true },
+        });
+    } catch (error) {
+        if (!isMissingBookRatingsTableError(error)) {
+            throw error;
+        }
+        aggregates = [];
+    }
+
+    const ratingMap = new Map(
+        aggregates.map((entry) => [
+            entry.book_id,
+            {
+                avg_rating: Number(entry._avg.rating || 0),
+                rating_count: entry._count.rating || 0,
+            },
+        ])
+    );
+
+    const enriched = books.map((book) => {
+        const metadata = ratingMap.get(book.id) || { avg_rating: 0, rating_count: 0 };
+        return {
+            ...book,
+            avg_rating: metadata.avg_rating,
+            rating_count: metadata.rating_count,
+        };
+    });
+
+    return Array.isArray(items) ? enriched : enriched[0];
+};
+
 router.get('/', async (req, res) => {
     try {
         const { category, search, genre, language, is_active } = req.query;
@@ -62,7 +125,7 @@ router.get('/', async (req, res) => {
             orderBy: { updated_at: 'desc' },
         });
 
-        res.json(books);
+        res.json(await attachRatingMetadata(books));
     } catch (error) {
         res.status(500).json({ detail: error.message });
     }
@@ -78,7 +141,7 @@ router.get('/isbn/:isbn', async (req, res) => {
             return res.status(404).json({ detail: 'Book not found' });
         }
 
-        res.json(book);
+        res.json(await attachRatingMetadata(book));
     } catch (error) {
         res.status(500).json({ detail: error.message });
     }
@@ -94,7 +157,7 @@ router.get('/:id', async (req, res) => {
             return res.status(404).json({ detail: 'Book not found' });
         }
 
-        res.json(book);
+        res.json(await attachRatingMetadata(book));
     } catch (error) {
         res.status(500).json({ detail: error.message });
     }

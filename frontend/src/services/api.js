@@ -4,6 +4,7 @@
  */
 import { API_BASE_URL, BACKEND_ORIGIN } from '../config/api';
 import { getAuthToken, getSupabaseSessionToken } from './authStore';
+import { reviewsAPI, giphyAPI } from './reviewsApi';
 
 /**
  * Generic fetch wrapper with error handling.
@@ -267,9 +268,30 @@ export const collectionsAPI = {
 // ============= Recommendations API =============
 
 export const recommendationsAPI = {
-    getPopular:       (limit = 10)    => fetchAPI(`/recommendations/popular?limit=${limit}`),
-    getRelated:       (bookId, limit = 8) => fetchAPI(`/recommendations/related/${bookId}?limit=${limit}`),
+    getPopular:       (limit = 10)         => fetchAPI(`/recommendations/popular?limit=${limit}`),
+    getRelated:       (bookId, limit = 8)  => fetchAPI(`/recommendations/related/${bookId}?limit=${limit}`),
     getForMember:     (memberId, limit = 10) => fetchAPI(`/recommendations/for-member/${memberId}?limit=${limit}`),
+    getTrending:      (days = 7, limit = 10) => fetchAPI(`/recommendations/trending?days=${days}&limit=${limit}`),
+    getAlsoBorrowed:  (bookId, limit = 6)  => fetchAPI(`/recommendations/also-borrowed/${bookId}?limit=${limit}`),
+    getMyProfile:     (memberId)           => fetchAPI(`/recommendations/my-profile?memberId=${memberId}`, { headers: getMemberAuthHeaders() }),
+    getGraphStats:    ()                   => fetchAPI('/recommendations/graph-stats', { headers: getAdminAuthHeaders() }),
+};
+
+// ============= Wishlist API (Member) =============
+
+export const wishlistAPI = {
+    add:     (bookId) => fetchAPI(`/wishlist/${bookId}`, { method: 'POST', headers: getMemberAuthHeaders() }),
+    remove:  (bookId) => fetchAPI(`/wishlist/${bookId}`, { method: 'DELETE', headers: getMemberAuthHeaders() }),
+    getAll:  ()       => fetchAPI('/wishlist', { headers: getMemberAuthHeaders() }),
+    check:   (bookId) => fetchAPI(`/wishlist/check/${bookId}`, { headers: getMemberAuthHeaders() }),
+    getRecommendations: (limit = 8) => fetchAPI(`/wishlist/recommendations?limit=${limit}`, { headers: getMemberAuthHeaders() }),
+};
+
+// ============= Public Ebooks API (Member) =============
+
+export const publicEbooksAPI = {
+    getAll:     () => fetchAPI('/ebooks/public', { headers: getMemberAuthHeaders() }),
+    getReadUrl: (id) => `${API_BASE_URL}/ebooks/public/${id}/read`,
 };
 
 // ============= Financial API (Admin) =============
@@ -400,4 +422,10 @@ export default {
     auth:            authAPI,
     announcements:   announcementsAPI,
     news:            newsAPI,
+    wishlist:      wishlistAPI,
+    publicEbooks:  publicEbooksAPI,
+    reviews:       reviewsAPI,
+    giphy:         giphyAPI,
 };
+
+export { reviewsAPI, giphyAPI };

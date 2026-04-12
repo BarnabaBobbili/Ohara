@@ -115,6 +115,22 @@ export default function Header() {
                             <span className="absolute bottom-0 left-0 w-0 h-px bg-[#c16549] group-hover:w-full transition-all duration-300"></span>
                         </Link>
                         <Link
+                            to="/wishlist"
+                            className="text-[#4A4540] dark:text-gray-300 text-[14px] font-medium hover:text-[#c16549] transition-colors relative group"
+                            style={{ fontFamily: "'Noto Sans', sans-serif" }}
+                        >
+                            Wishlist
+                            <span className="absolute bottom-0 left-0 w-0 h-px bg-[#c16549] group-hover:w-full transition-all duration-300"></span>
+                        </Link>
+                        <Link
+                            to="/ebooks"
+                            className="text-[#4A4540] dark:text-gray-300 text-[14px] font-medium hover:text-[#c16549] transition-colors relative group"
+                            style={{ fontFamily: "'Noto Sans', sans-serif" }}
+                        >
+                            E-Library
+                            <span className="absolute bottom-0 left-0 w-0 h-px bg-[#c16549] group-hover:w-full transition-all duration-300"></span>
+                        </Link>
+                        <Link
                             to="/about"
                             className="text-[#4A4540] dark:text-gray-300 text-[14px] font-medium hover:text-[#c16549] transition-colors relative group"
                             style={{ fontFamily: "'Noto Sans', sans-serif" }}
@@ -320,6 +336,24 @@ export default function Header() {
                         >
                             <span className="material-symbols-outlined text-[20px] text-[#c16549]">star</span>
                             Staff Picks
+                        </Link>
+                        <Link
+                            to="/wishlist"
+                            onClick={() => setIsMobileMenuOpen(false)}
+                            className="flex items-center gap-3 px-4 py-3 rounded-lg text-[#1E1815] dark:text-white hover:bg-[#c16549]/10 transition-colors"
+                            style={{ fontFamily: "'Noto Sans', sans-serif" }}
+                        >
+                            <span className="material-symbols-outlined text-[20px] text-[#c16549]">favorite</span>
+                            Wishlist
+                        </Link>
+                        <Link
+                            to="/ebooks"
+                            onClick={() => setIsMobileMenuOpen(false)}
+                            className="flex items-center gap-3 px-4 py-3 rounded-lg text-[#1E1815] dark:text-white hover:bg-[#c16549]/10 transition-colors"
+                            style={{ fontFamily: "'Noto Sans', sans-serif" }}
+                        >
+                            <span className="material-symbols-outlined text-[20px] text-[#c16549]">import_contacts</span>
+                            E-Library
                         </Link>
                         <Link
                             to="/about"

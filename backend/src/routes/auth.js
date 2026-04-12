@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import prisma from '../db/prisma.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { invalidateCacheByPrefix } from '../utils/cache.js';
+import { syncMemberToNeo4j } from '../db/neo4j.js';
 
 const router = express.Router();
 
@@ -35,6 +36,9 @@ router.post('/signup', async (req, res) => {
         });
 
         invalidateCacheByPrefix('dashboard:', 'reports:');
+
+        // Sync new member to Neo4j for recommendations (non-blocking)
+        syncMemberToNeo4j(member).catch(() => {});
 
         // Create JWT
         const token = jwt.sign(
