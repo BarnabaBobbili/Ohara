@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { dashboardAPI, reportsAPI, reservationsAPI, circulationAPI, financialAPI } from '../../services/api';
+import { dashboardAPI, reportsAPI, reservationsAPI, circulationAPI, financialAPI, recommendationsAPI } from '../../services/api';
 import { formatIST } from '../../utils/dateFormat';
 
 const DAY_MS = 1000 * 60 * 60 * 24;
@@ -31,6 +31,7 @@ export default function AdminDashboard() {
     const [cancellingReservationId, setCancellingReservationId] = useState(null);
     const [reservationCancelNotes, setReservationCancelNotes] = useState({});
     const [loading, setLoading] = useState(true);
+    const [graphStats, setGraphStats] = useState(null);
 
     useEffect(() => {
         loadData();
@@ -38,7 +39,7 @@ export default function AdminDashboard() {
 
     const loadData = async () => {
         try {
-            const [statsData, activityData, reservationData, fineReportData, overdueData, returnsData, financialData] = await Promise.all([
+            const [statsData, activityData, reservationData, fineReportData, overdueData, returnsData, financialData, graphStatsData] = await Promise.all([
                 dashboardAPI.getStats().catch(() => ({})),
                 reportsAPI.getActivityLogs({ limit: 50, skip: 0 }).catch(() => ({ logs: [], total: 0 })),
                 reservationsAPI.getAll({ status: 'pending', limit: 8 }).catch(() => []),
@@ -46,6 +47,7 @@ export default function AdminDashboard() {
                 circulationAPI.getOverdue().catch(() => []),
                 circulationAPI.getRecentReturns(10).catch(() => []),
                 financialAPI.getRecentTransactions(12).catch(() => []),
+                recommendationsAPI.getGraphStats().catch(() => null),
             ]);
             setStats({
                 books: statsData?.total_books || 0,
@@ -64,6 +66,7 @@ export default function AdminDashboard() {
             setOverdueBooks(Array.isArray(overdueData) ? overdueData : []);
             setRecentReturns(Array.isArray(returnsData) ? returnsData : []);
             setRecentFinancialTransactions(Array.isArray(financialData) ? financialData : []);
+            if (graphStatsData?.books !== undefined) setGraphStats(graphStatsData);
         } catch (error) {
             console.error('Failed to load dashboard:', error);
         } finally {
@@ -239,6 +242,35 @@ export default function AdminDashboard() {
                 </div>
                 <h1 className="text-3xl font-bold text-[#1E1815]">Dashboard</h1>
             </div>
+
+            {/* Neo4j Knowledge Graph Stats */}
+            {graphStats && (
+                <div className="mb-6 bg-gradient-to-br from-[#0f2744] to-[#1a3a5c] p-5 text-white shadow-xl">
+                    <div className="flex items-center gap-3 mb-4">
+                        <span className="material-symbols-outlined text-2xl text-blue-300">hub</span>
+                        <div>
+                            <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-blue-300">Live</p>
+                            <h3 className="text-base font-bold">Neo4j Knowledge Graph</h3>
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-3 md:grid-cols-6 gap-3 text-center">
+                        {[
+                            { label: 'Books', value: graphStats.books, icon: 'menu_book' },
+                            { label: 'Members', value: graphStats.members, icon: 'people' },
+                            { label: 'Borrows', value: graphStats.borrows, icon: 'swap_horiz' },
+                            { label: 'Wishlisted', value: graphStats.wishlisted, icon: 'favorite' },
+                            { label: 'Authors', value: graphStats.authors, icon: 'person' },
+                            { label: 'Categories', value: graphStats.categories, icon: 'category' },
+                        ].map(s => (
+                            <div key={s.label}>
+                                <span className="material-symbols-outlined text-blue-300 text-lg">{s.icon}</span>
+                                <p className="text-xl font-bold mt-0.5">{(s.value || 0).toLocaleString()}</p>
+                                <p className="text-blue-300 text-[10px] uppercase tracking-wider">{s.label}</p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {/* Stats Grid */}
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">

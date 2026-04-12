@@ -5,6 +5,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import prisma from '../db/prisma.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
+import { syncEbookToNeo4j } from '../db/neo4j.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -40,6 +41,47 @@ const upload = multer({
         }
         cb(new Error('Only EPUB and PDF files are allowed'));
     },
+});
+
+// ─── Member-Facing Public Ebook Routes ───────────────────────
+
+// GET /api/ebooks/public — list all public ebooks (members)
+router.get('/public', authenticateToken, async (req, res) => {
+    try {
+        const ebooks = await prisma.ebooks.findMany({
+            where: { is_public: true },
+            orderBy: { uploaded_at: 'desc' },
+            include: {
+                books: {
+                    select: { id: true, title: true, author: true, isbn: true },
+                },
+            },
+        });
+        res.json(ebooks);
+    } catch (error) {
+        res.status(500).json({ detail: error.message });
+    }
+});
+
+// GET /api/ebooks/public/:id/read — stream an ebook file to the member
+router.get('/public/:id/read', authenticateToken, async (req, res) => {
+    try {
+        const ebook = await prisma.ebooks.findFirst({
+            where: { id: Number.parseInt(req.params.id, 10), is_public: true },
+        });
+        if (!ebook) {
+            return res.status(404).json({ detail: 'Ebook not found or not public' });
+        }
+        if (!fs.existsSync(ebook.file_path)) {
+            return res.status(404).json({ detail: 'File not found on disk' });
+        }
+        const mime = ebook.file_format === 'pdf' ? 'application/pdf' : 'application/epub+zip';
+        res.setHeader('Content-Type', mime);
+        res.setHeader('Content-Disposition', `inline; filename="${ebook.title}.${ebook.file_format}"`);
+        fs.createReadStream(ebook.file_path).pipe(res);
+    } catch (error) {
+        res.status(500).json({ detail: error.message });
+    }
 });
 
 router.get('/', authenticateToken, requireAdmin, async (req, res) => {
@@ -79,13 +121,24 @@ router.post('/', authenticateToken, requireAdmin, upload.single('file'), async (
                 book_id: book_id ? Number.parseInt(book_id, 10) : null,
                 file_path: file.path,
                 file_format: path.extname(file.originalname).slice(1).toLowerCase(),
-                file_size: file.size,
+                file_size_bytes: BigInt(file.size),
                 is_public: is_public === 'true' || is_public === true,
                 uploaded_by: req.staff?.id || null,
             },
         });
 
         res.status(201).json(ebook);
+
+        // Sync to Neo4j (non-blocking)
+        syncEbookToNeo4j({
+            id: ebook.id,
+            title: ebook.title,
+            author: ebook.author,
+            is_public: ebook.is_public,
+            file_format: ebook.file_format,
+            uploaded_by_type: 'admin',
+            book_id: ebook.book_id || null,
+        }).catch(() => {});
     } catch (error) {
         res.status(500).json({ detail: error.message });
     }

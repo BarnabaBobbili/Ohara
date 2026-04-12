@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Header from '../components/Header';
+import WishlistButton from '../components/books/WishlistButton';
+import StarRating from '../components/reviews/StarRating';
 import { booksAPI, collectionsAPI, recommendationsAPI } from '../services/api';
 import { isBookNewArrival } from '../utils/newArrival';
 
@@ -534,6 +536,15 @@ export default function BookCatalog() {
                                         onMouseLeave={() => setHoveredBookId(null)}
                                         style={{ animationDelay: `${0.35 + (idx % 20) * 0.03}s` }}
                                     >
+                                        {/* Wishlist Heart Button */}
+                                        <div className="absolute top-2 right-2 z-30">
+                                            <WishlistButton
+                                                bookId={book.id}
+                                                size="sm"
+                                                className="bg-white/90 dark:bg-[#1e1614]/90 rounded-full p-1.5 shadow-md backdrop-blur-sm"
+                                            />
+                                        </div>
+
                                         {/* Book Cover with hover pop-up effect (from SearchResults) */}
                                         <div className="book-stack relative mb-4">
                                             {/* Availability Badge that pops up on hover */}
@@ -597,6 +608,9 @@ export default function BookCatalog() {
                                                 style={{ fontFamily: "'Noto Sans', sans-serif" }}>
                                                 {book.author || 'Unknown'}
                                             </p>
+                                            <div className="mt-2 flex justify-center">
+                                                <StarRating value={book.avg_rating || 0} size="sm" count={book.rating_count || 0} compact />
+                                            </div>
                                             {book.category && (
                                                 <p className="text-[9px] text-[#c16549] uppercase tracking-wider mt-1 font-semibold"
                                                     style={{ fontFamily: "'Noto Sans', sans-serif" }}>

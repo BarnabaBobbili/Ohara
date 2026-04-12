@@ -29,10 +29,13 @@ import recommendationsRouter from './routes/recommendations.js';
 import financialRouter from './routes/financial.js';
 import staffBoardRouter from './routes/staff_board.js';
 import ebooksRouter from './routes/ebooks.js';
+import wishlistRouter from './routes/wishlist.js';
 import announcementsRouter from './routes/announcements.js';
 import newsRouter from './routes/news.js';
 import analyticsRouter from './routes/analytics.js';
 import jobsRouter from './routes/jobs.js';
+import reviewsRouter from './routes/reviews.js';
+import giphyRouter from './routes/giphy.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { startScheduledJobs, stopScheduledJobs, getJobStatus } from './jobs/jobScheduler.js';
 
@@ -118,10 +121,13 @@ app.use('/api/recommendations', recommendationsRouter);
 app.use('/api/financial', financialRouter);
 app.use('/api/staff-board', staffBoardRouter);
 app.use('/api/ebooks', ebooksRouter);
+app.use('/api/wishlist', wishlistRouter);
 app.use('/api/announcements', announcementsRouter);
 app.use('/api/news', newsRouter);
 app.use('/api/analytics', analyticsRouter);
 app.use('/api/jobs', jobsRouter);
+app.use('/api/reviews', reviewsRouter);
+app.use('/api/giphy', giphyRouter);
 
 // 404 handler - must be after all routes
 app.use(notFoundHandler);

@@ -6,12 +6,18 @@ import prisma from '../db/prisma.js';
  * Frontend: pass Authorization: Bearer <session.access_token>
  * from supabase.auth.getSession()
  */
-export const authenticateToken = (req, res, next) => {
-    const authHeader = req.headers['authorization'];
+const applyAuthContext = (req, decoded) => {
+    req.user = decoded;
+    req.supabase_uid = decoded.sub || null;
+    req.user_email = decoded.email || null;
+    req.auth_type = decoded.sub ? 'supabase' : 'legacy';
+};
+
+const verifyAuthorizationHeader = (authHeader) => {
     const token = authHeader && authHeader.split(' ')[1];
 
     if (!token) {
-        return res.status(401).json({ detail: 'No token provided' });
+        return { ok: false, status: 401, detail: 'No token provided' };
     }
 
     const secrets = [
@@ -20,32 +26,50 @@ export const authenticateToken = (req, res, next) => {
     ].filter(Boolean);
 
     if (!secrets.length) {
-        return res.status(500).json({ detail: 'No JWT secret configured' });
+        return { ok: false, status: 500, detail: 'No JWT secret configured' };
     }
 
     let lastError = null;
     for (const secret of secrets) {
         try {
             const decoded = jwt.verify(token, secret);
-            req.user         = decoded;
-            req.supabase_uid = decoded.sub   || null;   // Supabase Auth UUID
-            req.user_email   = decoded.email || null;
-            req.auth_type    = decoded.sub ? 'supabase' : 'legacy';
-            return next();
+            return { ok: true, decoded };
         } catch (err) {
             lastError = err;
         }
     }
 
-    return res.status(403).json({
+    return {
+        ok: false,
+        status: 403,
         detail: lastError?.name === 'TokenExpiredError' ? 'Token expired' : 'Invalid or expired token',
-    });
+    };
+};
+
+export const authenticateToken = (req, res, next) => {
+    const verification = verifyAuthorizationHeader(req.headers['authorization']);
+    if (!verification.ok) {
+        return res.status(verification.status).json({ detail: verification.detail });
+    }
+
+    applyAuthContext(req, verification.decoded);
+    return next();
+};
+
+export const tryAuthenticateToken = (req) => {
+    const verification = verifyAuthorizationHeader(req.headers['authorization']);
+    if (!verification.ok) {
+        return false;
+    }
+
+    applyAuthContext(req, verification.decoded);
+    return true;
 };
 
 // ─── Resolve the member from the database ────────────────────
 // All users (including admins) are in the members table with role column
 
-const resolveMember = async (req) => {
+export const resolveMember = async (req) => {
     // 1. Try Supabase UID (fastest for logged-in Supabase users)
     if (req.supabase_uid) {
         const member = await prisma.members.findFirst({
@@ -74,6 +98,24 @@ const resolveMember = async (req) => {
     }
 
     return null;
+};
+
+export const requireMember = async (req, res, next) => {
+    try {
+        const member = await resolveMember(req);
+        if (!member) {
+            return res.status(404).json({ detail: 'Member account not found. Please link your account.' });
+        }
+        if (member.status !== 'active') {
+            return res.status(403).json({ detail: 'Only active members can access this resource' });
+        }
+
+        req.actor = member;
+        req.member = member;
+        next();
+    } catch {
+        res.status(500).json({ detail: 'Member auth check failed' });
+    }
 };
 
 /**

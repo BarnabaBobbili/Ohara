@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useLocation, useNavigate, Link } from 'react-router-dom';
 import Header from '../components/Header';
-import { booksAPI, reservationsAPI, auditAPI } from '../services/api';
+import WishlistButton from '../components/books/WishlistButton';
+import ReviewSection from '../components/reviews/ReviewSection';
+import StarRating from '../components/reviews/StarRating';
+import { booksAPI, reservationsAPI, auditAPI, recommendationsAPI } from '../services/api';
 import { getAuthState } from '../services/authStore';
 import { isBookNewArrival } from '../utils/newArrival';
 
@@ -15,6 +18,7 @@ export default function BookDetail() {
     const [reserveMessage, setReserveMessage] = useState('');
     const [myReservation, setMyReservation] = useState(null);
     const [bookHistory, setBookHistory] = useState([]);
+    const [alsoBorrowed, setAlsoBorrowed] = useState([]);
     const [loadingHistory, setLoadingHistory] = useState(false);
 
     const loadBookDetails = useCallback(async () => {
@@ -48,6 +52,11 @@ export default function BookDetail() {
             loadBookDetails();
         }
         loadBookHistory();
+        if (id) {
+            recommendationsAPI.getAlsoBorrowed(Number(id), 6)
+                .then(r => setAlsoBorrowed(Array.isArray(r) ? r : []))
+                .catch(() => {});
+        }
     }, [book, id, loadBookDetails, loadBookHistory]);
 
     useEffect(() => {
@@ -385,6 +394,13 @@ export default function BookDetail() {
                                 by {book.author || 'Unknown Author'}
                             </h2>
 
+                            <div className="flex items-center gap-3 mb-8">
+                                <StarRating value={book.avg_rating || 0} size="lg" />
+                                <span className="text-sm text-[#6B6560] dark:text-gray-400" style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                    {book.rating_count > 0 ? `${(book.avg_rating || 0).toFixed(1)} · ${book.rating_count} ratings` : 'No ratings yet'}
+                                </span>
+                            </div>
+
                             {/* Availability Status (Mobile) */}
                             <div className="flex lg:hidden items-center gap-3 mb-8 p-4 bg-white dark:bg-[#2a2622] rounded-sm border-l-4 border-[#c16549] editorial-shadow">
                                 <span className={`material-symbols-outlined text-2xl ${book.available_copies > 0 ? 'text-[#2f5233]' : 'text-[#c16549]'}`}>
@@ -437,6 +453,12 @@ export default function BookDetail() {
                                         {reserving ? 'Reserving...' : book.available_copies > 0 ? 'Reserve This Book' : 'Join Waitlist'}
                                     </button>
                                 )}
+                                <WishlistButton
+                                    bookId={book.id}
+                                    size="lg"
+                                    showLabel
+                                    className="px-4 py-3 bg-white dark:bg-[#2a2622] rounded-sm border border-[#E8E4DF] dark:border-[#3d3935] hover:border-[#c16549] dark:hover:border-[#c16549] transition-colors"
+                                />
                             </div>
 
                             {/* Availability Status (Desktop) */}
@@ -578,6 +600,54 @@ export default function BookDetail() {
                             </div>
                         </div>
                     </div>
+
+                    <div className="border-t border-[#E8E4DF] dark:border-[#3d3935] pt-12 mb-12 animate-fade-in-up delay-400">
+                        <ReviewSection bookId={book.id} bookTitle={book.title} />
+                    </div>
+
+                    {/* Readers Also Borrowed */}
+                    {alsoBorrowed.length > 0 && (
+                        <div className="border-t border-[#E8E4DF] dark:border-[#3d3935] pt-12 mb-8 animate-fade-in-up delay-400">
+                            <div className="flex items-center gap-3 mb-2">
+                                <div className="h-px bg-[#c16549] w-8" />
+                                <h3 className="text-[10px] font-bold tracking-[0.15em] uppercase text-[#c16549]"
+                                    style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                    Readers Also Borrowed
+                                </h3>
+                            </div>
+                            <p className="text-sm text-[#6B6560] dark:text-gray-400 mb-6 italic"
+                                style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                Members who borrowed this book also read these
+                            </p>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">
+                                {alsoBorrowed.map(b => (
+                                    <Link
+                                        key={b.id || b.book_id}
+                                        to={`/book/${b.id || b.book_id}`}
+                                        className="group flex flex-col gap-2 cursor-pointer"
+                                    >
+                                        <div className="aspect-[2/3] bg-[#E8E4DF] dark:bg-[#3d3935] rounded-sm overflow-hidden">
+                                            {b.cover_image_url ? (
+                                                <img src={b.cover_image_url} alt={b.title}
+                                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                                            ) : (
+                                                <div className="w-full h-full bg-gradient-to-br from-[#89332a] to-[#c16549] flex items-center justify-center p-2">
+                                                    <p className="text-white/90 text-[10px] font-bold text-center leading-tight"
+                                                        style={{ fontFamily: "'Newsreader', serif" }}>{b.title}</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-bold text-[#1E1815] dark:text-white line-clamp-2 group-hover:text-[#c16549] transition-colors"
+                                                style={{ fontFamily: "'Newsreader', serif" }}>{b.title}</p>
+                                            <p className="text-[10px] text-[#6B6560] dark:text-gray-400 italic mt-0.5"
+                                                style={{ fontFamily: "'Noto Sans', sans-serif" }}>{b.author || 'Unknown'}</p>
+                                        </div>
+                                    </Link>
+                                ))}
+                            </div>
+                        </div>
+                    )}
 
                     {/* Footer spacing */}
                     <div className="h-16 md:h-24" />

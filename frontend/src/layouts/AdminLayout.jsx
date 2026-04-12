@@ -38,6 +38,7 @@ export default function AdminLayout() {
         { path: '/admin/cms', icon: 'edit_note', label: 'CMS Studio' },
         { path: '/admin/content', icon: 'campaign', label: 'News & Alerts' },
         { path: '/admin/ebooks', icon: 'menu_book', label: 'Digital Library' },
+        { path: '/admin/reviews', icon: 'rate_review', label: 'Reviews' },
         { path: '/admin/reports', icon: 'analytics', label: 'Analytics' },
         { path: '/admin/audit-trail', icon: 'history', label: 'Audit Trail' },
         { path: '/admin/settings', icon: 'tune', label: 'Settings' },

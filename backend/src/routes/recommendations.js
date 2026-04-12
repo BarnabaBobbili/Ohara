@@ -4,6 +4,13 @@ import {
     getRelatedBooks,
     getPopularBooks,
 } from '../db/neo4j.js';
+import {
+    getPopularBooksInPeriod,
+    getAlsoBorrowed,
+    getMemberCategoryInterests,
+    getWishlistRecommendations,
+    getNeo4jGraphStats,
+} from '../db/neo4j.js';
 import prisma from '../db/prisma.js';
 
 const router = express.Router();
@@ -185,6 +192,106 @@ router.get('/for-member/:memberId', async (req, res) => {
         }
 
         res.json(recs);
+    } catch (error) {
+        res.status(500).json({ detail: error.message });
+    }
+});
+
+// ─── GET /api/recommendations/trending ───────────────────────
+// Books with most borrows in last N days (defaults to 7)
+router.get('/trending', async (req, res) => {
+    try {
+        const days = Number.parseInt(req.query.days, 10) || 7;
+        const limit = Number.parseInt(req.query.limit, 10) || 10;
+        let books = await getPopularBooksInPeriod(days, limit);
+
+        if (books.length) {
+            const ids = books.map(b => b.book_id);
+            const pgBooks = await prisma.books.findMany({
+                where: { id: { in: ids } },
+                select: { id: true, title: true, author: true, cover_image_url: true, category: true, available_copies: true },
+            });
+            books = books.map(b => ({ ...b, ...pgBooks.find(p => p.id === b.book_id) }));
+        } else {
+            // Fallback: most borrowed from PostgreSQL in last N days
+            const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+            const txGroups = await prisma.transactions.groupBy({
+                by: ['book_id'],
+                where: { checkout_date: { gte: since } },
+                _count: { id: true },
+                orderBy: { _count: { id: 'desc' } },
+                take: limit,
+            });
+            if (txGroups.length) {
+                const ids = txGroups.map(g => g.book_id);
+                const pgBooks = await prisma.books.findMany({
+                    where: { id: { in: ids } },
+                    select: { id: true, title: true, author: true, cover_image_url: true, category: true, available_copies: true },
+                });
+                books = ids.map(id => pgBooks.find(b => b.id === id)).filter(Boolean);
+            }
+        }
+        res.json(books);
+    } catch (error) {
+        res.status(500).json({ detail: error.message });
+    }
+});
+
+// ─── GET /api/recommendations/also-borrowed/:bookId ──────────
+// Books frequently borrowed together with the given book ("Also Bought" pattern)
+router.get('/also-borrowed/:bookId', async (req, res) => {
+    try {
+        const bookId = Number.parseInt(req.params.bookId, 10);
+        const limit = Number.parseInt(req.query.limit, 10) || 6;
+        let books = await getAlsoBorrowed(bookId, limit);
+
+        if (books.length) {
+            const ids = books.map(b => b.book_id);
+            const pgBooks = await prisma.books.findMany({
+                where: { id: { in: ids } },
+                select: { id: true, title: true, author: true, cover_image_url: true, category: true, available_copies: true },
+            });
+            books = books.map(b => ({ ...b, ...pgBooks.find(p => p.id === b.book_id) }));
+        } else {
+            // Fallback: same category books
+            const book = await prisma.books.findUnique({ where: { id: bookId }, select: { category: true } });
+            if (book?.category) {
+                const fallback = await prisma.books.findMany({
+                    where: { category: book.category, id: { not: bookId } },
+                    select: { id: true, title: true, author: true, cover_image_url: true, category: true, available_copies: true },
+                    take: limit,
+                });
+                books = fallback.map(b => ({ ...b, book_id: b.id, reason: 'same_category' }));
+            }
+        }
+        res.json(books);
+    } catch (error) {
+        res.status(500).json({ detail: error.message });
+    }
+});
+
+// ─── GET /api/recommendations/my-profile ─────────────────────
+// Category interests for a member (for reading profile bars)
+// Query param: memberId (integer)
+router.get('/my-profile', async (req, res) => {
+    try {
+        const memberId = Number.parseInt(req.query.memberId, 10);
+        if (!memberId || Number.isNaN(memberId)) {
+            return res.status(400).json({ detail: 'memberId query param required' });
+        }
+        const interests = await getMemberCategoryInterests(memberId);
+        res.json(interests);
+    } catch (error) {
+        res.status(500).json({ detail: error.message });
+    }
+});
+
+// ─── GET /api/recommendations/graph-stats ────────────────────
+// Returns counts of nodes and relationships in the Neo4j graph (admin use)
+router.get('/graph-stats', async (req, res) => {
+    try {
+        const stats = await getNeo4jGraphStats();
+        res.json(stats);
     } catch (error) {
         res.status(500).json({ detail: error.message });
     }

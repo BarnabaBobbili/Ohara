@@ -36,6 +36,7 @@ model books {
   created_at        DateTime           @default(now()) @db.Timestamptz(6)
   updated_at        DateTime           @default(now()) @db.Timestamptz(6)
   collection_books  collection_books[]
+  book_ratings      book_ratings[]
   ebooks            ebooks[]
   reservations      reservations[]
   transactions      transactions[]
@@ -52,6 +53,21 @@ model books {
   @@index([title], map: "idx_books_title")
   @@index([title(ops: raw("gin_trgm_ops"))], map: "idx_books_title_trgm", type: Gin)
   @@index([updated_at(sort: Desc)], map: "idx_books_updated_at")
+}
+
+model book_ratings {
+  id         Int      @id @default(autoincrement())
+  book_id    Int
+  member_id  Int
+  rating     Int
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+  books      books    @relation(fields: [book_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  members    members  @relation(fields: [member_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([book_id, member_id])
+  @@index([book_id], map: "idx_book_ratings_book")
+  @@index([member_id], map: "idx_book_ratings_member")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -162,6 +178,7 @@ model members {
   created_at          DateTime              @default(now()) @db.Timestamptz(6)
   updated_at          DateTime              @default(now()) @db.Timestamptz(6)
   role                String                @default("member") @db.VarChar(30)
+  book_ratings        book_ratings[]
   reading_progress    reading_progress[]
   reservations        reservations[]
   transactions        transactions[]

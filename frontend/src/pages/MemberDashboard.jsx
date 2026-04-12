@@ -2,8 +2,9 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import Header from '../components/Header';
+import MyReviewsPanel from '../components/reviews/MyReviewsPanel';
 import { getAuthState } from '../services/authStore';
-import { circulationAPI, recommendationsAPI, authAPI, settingsAPI, reservationsAPI, financialAPI } from '../services/api';
+import { circulationAPI, recommendationsAPI, authAPI, settingsAPI, reservationsAPI, financialAPI, wishlistAPI } from '../services/api';
 
 const DAY_MS = 1000 * 60 * 60 * 24;
 
@@ -78,6 +79,9 @@ export default function MemberDashboard() {
     const [reservationActionId, setReservationActionId] = useState(null);
     const [dailyFineRate, setDailyFineRate] = useState(0.5);
     const [loading, setLoading]             = useState(true);
+    const [readingProfile, setReadingProfile] = useState([]);
+    const [wishlistCount, setWishlistCount] = useState(0);
+    const [trendingBooks, setTrendingBooks] = useState([]);
 
     const greeting  = getGreeting();
     const firstName = memberProfile?.name?.split(' ')[0] || authState.user?.name?.split(' ')[0] || 'Reader';
@@ -115,6 +119,19 @@ export default function MemberDashboard() {
             setHistory(histArr);
             setReservations(reservationsArr);
             setFinancialTransactions(transactionsArr);
+
+            // Neo4j feature fetches (non-blocking, all catch errors silently)
+            if (profile?.id) {
+                recommendationsAPI.getMyProfile(profile.id)
+                    .then(r => setReadingProfile(Array.isArray(r) ? r : []))
+                    .catch(() => {});
+            }
+            wishlistAPI.getAll()
+                .then(r => setWishlistCount(Array.isArray(r) ? r.length : 0))
+                .catch(() => {});
+            recommendationsAPI.getTrending(7, 6)
+                .then(r => setTrendingBooks(Array.isArray(r) ? r : []))
+                .catch(() => {});
 
             // If we have a book, get related recommendations
             if (loansArr.length > 0 && loansArr[0].books?.id) {
@@ -417,6 +434,7 @@ export default function MemberDashboard() {
                                                     { icon: 'history',     value: totalBorrowed,  label: 'Total Borrows', color: 'text-[#6B6560]' },
                                                     { icon: 'warning',     value: overdueCount,   label: 'Overdue', danger: overdueCount > 0, color: overdueCount > 0 ? 'text-[#c16549]' : 'text-[#6B6560]' },
                                                     { icon: 'payments',    value: currentDues, label: 'Dues', danger: currentDues > 0, formatCurrency: true, color: currentDues > 0 ? 'text-[#c16549]' : 'text-[#2f5233]' },
+                                                    { icon: 'favorite', value: wishlistCount, label: 'Wishlisted', color: 'text-[#c16549]' },
                                                 ].map((stat, idx) => (
                                                     <div key={stat.label} className={`p-4 rounded-sm flex flex-col gap-2 border transition-all ${stat.danger && stat.value > 0 ? 'bg-[#fef5f3] border-[#c16549]/20 dark:bg-[#3d2a27] dark:border-[#c16549]/30' : 'bg-[#FAF7F2] dark:bg-[#3d3935] border-[#E8E4DF] dark:border-[#4d4945]'}`}
                                                         style={{ animationDelay: `${0.4 + idx * 0.05}s` }}>
@@ -694,6 +712,10 @@ export default function MemberDashboard() {
                                     </div>
                                 </section>
 
+                                <div className="animate-fade-in-up delay-400">
+                                    <MyReviewsPanel />
+                                </div>
+
                                 {/* Bottom: History + Recommendations - Editorial Layout */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 lg:gap-10 animate-fade-in-up delay-400">
                                     {/* Borrowing History */}
@@ -788,6 +810,69 @@ export default function MemberDashboard() {
                                         )}
                                     </div>
                                 </div>
+
+                                {/* Reading Profile */}
+                                {readingProfile.length > 0 && (
+                                    <div className="bg-white dark:bg-[#2a2622] rounded-sm editorial-shadow p-6 border border-[#E8E4DF] dark:border-[#3d3935] mb-6">
+                                        <div className="flex items-center gap-2 mb-4">
+                                            <span className="material-symbols-outlined text-[#c16549] text-base">insights</span>
+                                            <h2 className="text-xs font-bold text-[#c16549] uppercase tracking-[0.15em]"
+                                                style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                                Your Reading Profile
+                                            </h2>
+                                        </div>
+                                        <div className="flex flex-col gap-3">
+                                            {readingProfile.map(cat => {
+                                                const maxScore = readingProfile[0]?.interest_score || 1;
+                                                const pct = Math.round((cat.interest_score / maxScore) * 100);
+                                                return (
+                                                    <div key={cat.category} className="flex items-center gap-3">
+                                                        <span className="text-xs w-28 truncate text-[#6B6560] dark:text-gray-400"
+                                                            style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                                            {cat.category}
+                                                        </span>
+                                                        <div className="flex-1 h-2 bg-[#E8E4DF] dark:bg-[#3d3935] rounded-full overflow-hidden">
+                                                            <div className="h-full bg-[#c16549] rounded-full transition-all duration-700"
+                                                                style={{ width: `${pct}%` }} />
+                                                        </div>
+                                                        <span className="text-xs text-[#6B6560] dark:text-gray-400 w-6 text-right"
+                                                            style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                                            {cat.interest_score}
+                                                        </span>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Trending This Week */}
+                                {trendingBooks.length > 0 && (
+                                    <div className="bg-white dark:bg-[#2a2622] rounded-sm editorial-shadow p-6 border border-[#E8E4DF] dark:border-[#3d3935] mb-6">
+                                        <div className="flex items-center gap-2 mb-4">
+                                            <span className="material-symbols-outlined text-[#c16549] text-base">trending_up</span>
+                                            <h2 className="text-xs font-bold text-[#c16549] uppercase tracking-[0.15em]"
+                                                style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                                Trending This Week
+                                            </h2>
+                                        </div>
+                                        <div className="flex flex-col gap-2">
+                                            {trendingBooks.map((b, i) => (
+                                                <Link key={b.id || b.book_id} to={`/book/${b.id || b.book_id}`}
+                                                    className="flex items-center gap-3 p-2 hover:bg-[#FAF7F2] dark:hover:bg-[#3d3935] rounded-sm transition-colors group">
+                                                    <span className="text-xs font-bold text-[#c16549] w-4 text-center">{i + 1}</span>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-sm font-semibold text-[#1E1815] dark:text-white truncate group-hover:text-[#c16549] transition-colors"
+                                                            style={{ fontFamily: "'Newsreader', serif" }}>{b.title}</p>
+                                                        <p className="text-xs text-[#6B6560] dark:text-gray-400 italic"
+                                                            style={{ fontFamily: "'Noto Sans', sans-serif" }}>{b.author || 'Unknown'}</p>
+                                                    </div>
+                                                    <span className="material-symbols-outlined text-[16px] text-[#E8E4DF] dark:text-[#3d3935] group-hover:text-[#c16549] transition-colors">chevron_right</span>
+                                                </Link>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
 
                             </>
                         )}
