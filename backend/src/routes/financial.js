@@ -131,13 +131,11 @@ router.get('/recent-transactions', authenticateToken, requireStaff, async (req, 
         }
         if (!pool) return res.json([]);
 
-        const [rows] = await pool.execute(
-            `SELECT id, member_id, transaction_type, amount, description, processed_by, created_at
+        const sql = `SELECT id, member_id, transaction_type, amount, description, processed_by, created_at
              FROM financial_records
              ORDER BY created_at DESC
-             LIMIT ?`,
-            [limit]
-        );
+             LIMIT ${limit}`;
+        const [rows] = await pool.query(sql);
 
         const records = Array.isArray(rows) ? rows : [];
         const memberIds = [...new Set(records.map((record) => Number(record.member_id)).filter(Number.isFinite))];
@@ -171,15 +169,18 @@ router.get('/monthly-summary', authenticateToken, requireAdmin, async (req, res)
         const pool = getMySQLPool();
         if (!pool) return res.status(503).json({ detail: 'MySQL unavailable' });
 
-        const year  = req.query.year  || new Date().getFullYear();
-        const month = req.query.month || new Date().getMonth() + 1;
+        const now = new Date();
+        const requestedYear = Number.parseInt(req.query.year, 10);
+        const requestedMonth = Number.parseInt(req.query.month, 10);
+        const year = Number.isFinite(requestedYear) ? requestedYear : now.getFullYear();
+        const month = Number.isFinite(requestedMonth) ? Math.min(Math.max(requestedMonth, 1), 12) : (now.getMonth() + 1);
 
         const [rows] = await pool.execute(
             `SELECT transaction_type, COUNT(*) AS count, SUM(amount) AS total, AVG(amount) AS avg_amount
              FROM financial_records
              WHERE YEAR(created_at) = ? AND MONTH(created_at) = ?
              GROUP BY transaction_type`,
-            [parseInt(year), parseInt(month)]
+            [year, month]
         );
         res.json({ year, month, summary: rows });
     } catch (error) {
@@ -197,6 +198,10 @@ router.get('/my-transactions', authenticateToken, async (req, res) => {
 
         const requestedLimit = Number.parseInt(req.query?.limit, 10);
         const limit = Number.isFinite(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 100) : 20;
+        const memberId = Number.parseInt(member.id, 10);
+        if (!Number.isFinite(memberId)) {
+            return res.status(400).json({ detail: 'Invalid member id context' });
+        }
 
         let pool;
         try {
@@ -206,14 +211,14 @@ router.get('/my-transactions', authenticateToken, async (req, res) => {
         }
         if (!pool) return res.json([]);
 
-        const [rows] = await pool.execute(
-            `SELECT id, member_id, transaction_type, amount, description, processed_by, created_at
+        // Use a plain query with sanitized numeric literals to avoid driver/server
+        // prepared-statement edge cases around LIMIT bindings.
+        const sql = `SELECT id, member_id, transaction_type, amount, description, processed_by, created_at
              FROM financial_records
-             WHERE member_id = ?
+             WHERE member_id = ${memberId}
              ORDER BY created_at DESC
-             LIMIT ?`,
-            [member.id, limit]
-        );
+             LIMIT ${limit}`;
+        const [rows] = await pool.query(sql);
 
         return res.json(Array.isArray(rows) ? rows : []);
     } catch (error) {

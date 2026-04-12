@@ -3,7 +3,7 @@
  * Handles all HTTP requests to the backend
  */
 import { API_BASE_URL, BACKEND_ORIGIN } from '../config/api';
-import { getAuthToken, getSupabaseSessionToken } from './authStore';
+import { clearAuthState, getAuthToken, getSupabaseSessionToken } from './authStore';
 import { reviewsAPI, giphyAPI } from './reviewsApi';
 
 /**
@@ -25,15 +25,36 @@ async function fetchAPI(endpoint, options = {}) {
 
         if (!response.ok) {
             const body = await response.json().catch(() => ({ detail: 'Request failed' }));
-            const err = new Error(body.detail || 'API request failed');
+            const detail = body.detail || 'API request failed';
+            const normalizedDetail = String(detail).toLowerCase();
+            const isAuthError = response.status === 401
+                || (response.status === 403 && (
+                    normalizedDetail.includes('token expired')
+                    || normalizedDetail.includes('invalid or expired token')
+                    || normalizedDetail.includes('no token provided')
+                ));
+
+            if (isAuthError) {
+                clearAuthState();
+                if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new CustomEvent('auth:expired', {
+                        detail: { status: response.status, message: detail },
+                    }));
+                }
+            }
+
+            const err = new Error(detail);
             err.status = response.status;
+            err.isAuthError = isAuthError;
             throw err;
         }
 
         if (response.status === 204) return null;
         return await response.json();
     } catch (error) {
-        console.error('API Error:', error);
+        if (!error?.isAuthError) {
+            console.error('API Error:', error);
+        }
         throw error;
     }
 }
