@@ -3,19 +3,54 @@
  * Simple localStorage-based auth state
  */
 
+const TOKEN_EXPIRY_SKEW_SECONDS = 30;
+
+const decodeJwtPayload = (token) => {
+    if (!token || typeof token !== 'string') return null;
+    const parts = token.split('.');
+    if (parts.length < 2) return null;
+
+    try {
+        const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+        const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=');
+        const json = atob(padded);
+        return JSON.parse(json);
+    } catch {
+        return null;
+    }
+};
+
+const isTokenExpired = (token, skewSeconds = TOKEN_EXPIRY_SKEW_SECONDS) => {
+    const payload = decodeJwtPayload(token);
+    const exp = Number(payload?.exp);
+
+    // If exp is missing, treat token as non-expiring/unknown and let backend validate.
+    if (!Number.isFinite(exp)) return false;
+
+    const now = Math.floor(Date.now() / 1000);
+    return exp <= now + Math.max(0, Number(skewSeconds) || 0);
+};
+
 const parseSupabaseSession = (raw) => {
     if (!raw) return null;
 
     try {
         const parsed = JSON.parse(raw);
-        if (parsed?.access_token) return parsed;
-        if (parsed?.currentSession?.access_token) return parsed.currentSession;
-        if (parsed?.session?.access_token) return parsed.session;
+        if (parsed?.access_token && !isTokenExpired(parsed.access_token)) return parsed;
+        if (parsed?.currentSession?.access_token && !isTokenExpired(parsed.currentSession.access_token)) return parsed.currentSession;
+        if (parsed?.session?.access_token && !isTokenExpired(parsed.session.access_token)) return parsed.session;
     } catch (error) {
         console.error('Failed to parse Supabase session:', error);
     }
 
     return null;
+};
+
+const getStoredAuthToken = () => {
+    const token = localStorage.getItem('auth_token');
+    if (!token) return null;
+    if (isTokenExpired(token)) return null;
+    return token;
 };
 
 export const getSupabaseSession = () => {
@@ -36,7 +71,7 @@ export const getSupabaseSessionToken = () => getSupabaseSession()?.access_token 
 
 // Get auth state from localStorage
 export const getAuthState = () => {
-    const token = localStorage.getItem('auth_token');
+    const token = getStoredAuthToken();
     const userJson = localStorage.getItem('auth_user');
 
     if (token && !userJson) {
@@ -90,11 +125,11 @@ export const getCurrentUser = () => {
 
 // Get auth token
 export const getAuthToken = () => {
-    return getAuthState().token;
+    return getStoredAuthToken() || getSupabaseSessionToken();
 };
 
 export const hasAnySessionToken = () => {
-    return Boolean(localStorage.getItem('auth_token') || getSupabaseSessionToken());
+    return Boolean(getStoredAuthToken() || getSupabaseSessionToken());
 };
 
 // Logout

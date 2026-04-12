@@ -27,6 +27,12 @@ import {
     getFiscalYearIndian
 } from '../utils/indianLocale.js';
 
+const toSafePositiveInt = (value, fallback, min = 1, max = 1000) => {
+    const parsed = Number.parseInt(value, 10);
+    if (!Number.isFinite(parsed)) return fallback;
+    return Math.min(Math.max(parsed, min), max);
+};
+
 /**
  * Get financial summary by transaction type
  * Groups financial records by type and calculates totals
@@ -150,6 +156,8 @@ export const getTopMembersByFines = async (days = 90, limit = 20) => {
         if (!pool) {
             throw new DatabaseError('MySQL connection not available');
         }
+        const safeDays = toSafePositiveInt(days, 90, 1, 3650);
+        const safeLimit = toSafePositiveInt(limit, 20, 1, 500);
         
         const query = `
             SELECT 
@@ -165,10 +173,10 @@ export const getTopMembersByFines = async (days = 90, limit = 20) => {
             GROUP BY member_id
             HAVING totalFines > 0
             ORDER BY totalFines DESC
-            LIMIT ?
+            LIMIT ${safeLimit}
         `;
         
-        const [rows] = await pool.execute(query, [days, limit]);
+        const [rows] = await pool.execute(query, [safeDays]);
         
         return rows.map(row => {
             const totalFines = parseFloat(row.totalFines || 0);
@@ -268,6 +276,8 @@ export const getFinesWithTransactionLinks = async (days = 90, limit = 50) => {
         if (!pool) {
             throw new DatabaseError('MySQL connection not available');
         }
+        const safeDays = toSafePositiveInt(days, 90, 1, 3650);
+        const safeLimit = toSafePositiveInt(limit, 50, 1, 1000);
         
         const query = `
             SELECT 
@@ -282,10 +292,10 @@ export const getFinesWithTransactionLinks = async (days = 90, limit = 50) => {
             WHERE transaction_type = 'fine'
                 AND created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
             ORDER BY amount DESC
-            LIMIT ?
+            LIMIT ${safeLimit}
         `;
         
-        const [rows] = await pool.execute(query, [days, limit]);
+        const [rows] = await pool.execute(query, [safeDays]);
         
         return rows.map(row => ({
             id: row.id,

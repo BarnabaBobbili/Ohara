@@ -24,6 +24,10 @@ export default function AdminRoute({ children }) {
         }
 
         let cancelled = false;
+        const onAuthExpired = () => {
+            if (!cancelled) setStatus('unauthenticated');
+        };
+        window.addEventListener('auth:expired', onAuthExpired);
 
         const validateAdmin = async () => {
             try {
@@ -36,17 +40,24 @@ export default function AdminRoute({ children }) {
                 }
             } catch (err) {
                 if (!cancelled) {
-                    // 403 = member exists but not admin → show forbidden
-                    // 500 / network = treat as unauthenticated so they can login
-                    const status4xx = err?.status === 403 || String(err?.message).includes('403');
-                    setStatus(status4xx ? 'forbidden' : 'unauthenticated');
+                    const message = String(err?.message || '').toLowerCase();
+                    const isExplicitRoleForbidden = err?.status === 403
+                        && message.includes('staff access required');
+                    if (isExplicitRoleForbidden) {
+                        setStatus('forbidden');
+                        return;
+                    }
+                    setStatus('unauthenticated');
                 }
             }
         };
 
         validateAdmin();
 
-        return () => { cancelled = true; };
+        return () => {
+            cancelled = true;
+            window.removeEventListener('auth:expired', onAuthExpired);
+        };
     }, []);
 
     if (status === 'checking') {
