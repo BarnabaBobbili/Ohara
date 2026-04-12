@@ -9,6 +9,7 @@ import { ensurePostgresIndexes } from './db/postgresIndexes.js';
 import { validateDataStoreConfig, DATA_STORES } from './config/dataStores.js';
 import { getCacheStats } from './utils/cache.js';
 import { getLogQueueStats } from './db/logQueue.js';
+import { ensureBucket } from './utils/storage.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -40,6 +41,14 @@ import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { startScheduledJobs, stopScheduledJobs, getJobStatus } from './jobs/jobScheduler.js';
 
 dotenv.config();
+
+// ─── Global BigInt serialization fix ───────────────────────────────────────
+// Prisma returns BigInt for columns declared @db.BigInt (e.g. file_size_bytes).
+// Node's JSON.stringify cannot serialize BigInt natively; this adds a safe
+// toJSON() so all res.json() calls convert BigInt → Number automatically.
+// biome-ignore lint/suspicious/noExtendNative: intentional polyfill
+BigInt.prototype.toJSON = function () { return Number(this); };
+// ───────────────────────────────────────────────────────────────────────────
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -176,6 +185,12 @@ const startServer = async () => {
         await connectMySQL();
     } catch {
         console.error('Note: MySQL connection failed (optional)');
+    }
+
+    try {
+        await ensureBucket();
+    } catch (error) {
+        console.error('Note: Supabase storage initialization failed (optional):', error.message);
     }
 
     const uploadsDir = path.join(__dirname, '..', 'uploads');

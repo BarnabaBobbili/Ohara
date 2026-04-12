@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Header from '../components/Header';
 import WishlistButton from '../components/books/WishlistButton';
@@ -31,8 +31,18 @@ export default function BookCatalog() {
     const [filterCategory, setFilterCategory] = useState('all');
     const [availabilityFilter, setAvailabilityFilter] = useState('available');
     const [sectionTitle, setSectionTitle] = useState('Library Catalog');
+    const [allCategories, setAllCategories] = useState([]);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(50);
+    const [pagination, setPagination] = useState({
+        page: 1,
+        limit: 50,
+        total: 0,
+        total_pages: 0,
+        has_next: false,
+        has_prev: false,
+    });
     const navigate = useNavigate();
-    const activePreset = searchParams.get('filter') || '';
 
     useEffect(() => {
         const query = searchParams.get('q') || '';
@@ -41,44 +51,169 @@ export default function BookCatalog() {
         if (activeFilter === 'new') {
             setSortBy('year');
         }
-        loadBooks(query, activeFilter);
+        setCurrentPage(1);
     }, [searchParams]);
 
-    const loadBooks = async (search = '', activeFilter = '') => {
+    useEffect(() => {
+        booksAPI.getCategories()
+            .then((categories) => {
+                if (Array.isArray(categories)) {
+                    setAllCategories(categories.filter(Boolean));
+                }
+            })
+            .catch(() => {
+                setAllCategories([]);
+            });
+    }, []);
+
+    const loadBooks = useCallback(async ({ search = '', activeFilter = '', page = 1, perPage = 50 } = {}) => {
         setLoading(true);
         try {
             let loadedBooks = [];
             let nextTitle = 'Library Catalog';
+            let nextPagination = {
+                page,
+                limit: perPage,
+                total: 0,
+                total_pages: 0,
+                has_next: false,
+                has_prev: page > 1,
+            };
+
+            const applyLocalPresetFilters = (items) => {
+                const filtered = items.filter((book) => {
+                    if (filterCategory !== 'all' && (book.category || 'Uncategorized') !== filterCategory) {
+                        return false;
+                    }
+                    if (availabilityFilter === 'available') return book.available_copies > 0;
+                    if (availabilityFilter === 'checked_out') return book.available_copies <= 0;
+                    return true;
+                });
+
+                return filtered.sort((left, right) => {
+                    if (sortBy === 'popular') {
+                        const leftPopularity = Number(left.borrow_count ?? left.score ?? left.rating_count ?? 0);
+                        const rightPopularity = Number(right.borrow_count ?? right.score ?? right.rating_count ?? 0);
+                        if (rightPopularity !== leftPopularity) {
+                            return rightPopularity - leftPopularity;
+                        }
+                    }
+                    if (sortBy === 'author') return (left.author || '').localeCompare(right.author || '');
+                    if (sortBy === 'year') return (right.publication_year || 0) - (left.publication_year || 0);
+                    return (left.title || '').localeCompare(right.title || '');
+                });
+            };
 
             if (activeFilter === 'staff-picks') {
-                loadedBooks = (await recommendationsAPI.getPopular(120)).map(normalizeBook);
+                const allStaffPicks = applyLocalPresetFilters(
+                    dedupeBooks((await recommendationsAPI.getPopular(400)).map(normalizeBook))
+                );
+                const total = allStaffPicks.length;
+                const totalPages = total > 0 ? Math.ceil(total / perPage) : 0;
+                const safePage = totalPages > 0 ? Math.min(page, totalPages) : 1;
+                const start = (safePage - 1) * perPage;
+                loadedBooks = allStaffPicks.slice(start, start + perPage);
+                nextPagination = {
+                    page: safePage,
+                    limit: perPage,
+                    total,
+                    total_pages: totalPages,
+                    has_next: totalPages > 0 && safePage < totalPages,
+                    has_prev: safePage > 1,
+                };
                 nextTitle = 'Staff Picks';
             } else if (activeFilter === 'collections') {
                 const collections = await collectionsAPI.getAll();
-                loadedBooks = collections.flatMap((collection) => collection.books || []).map(normalizeBook);
+                const allCollectionBooks = applyLocalPresetFilters(
+                    dedupeBooks(
+                        collections.flatMap((collection) => collection.books || []).map(normalizeBook)
+                    )
+                );
+                const total = allCollectionBooks.length;
+                const totalPages = total > 0 ? Math.ceil(total / perPage) : 0;
+                const safePage = totalPages > 0 ? Math.min(page, totalPages) : 1;
+                const start = (safePage - 1) * perPage;
+                loadedBooks = allCollectionBooks.slice(start, start + perPage);
+                nextPagination = {
+                    page: safePage,
+                    limit: perPage,
+                    total,
+                    total_pages: totalPages,
+                    has_next: totalPages > 0 && safePage < totalPages,
+                    has_prev: safePage > 1,
+                };
                 nextTitle = 'Curated Collections';
             } else {
-                const params = { limit: 120 };
+                const params = {
+                    paginate: 'true',
+                    page,
+                    limit: perPage,
+                    sort_by: sortBy === 'author'
+                        ? 'author'
+                        : sortBy === 'year'
+                            ? 'publication_year'
+                            : sortBy === 'popular'
+                                ? 'popular'
+                                : 'title',
+                    sort_order: (sortBy === 'year' || sortBy === 'popular') ? 'desc' : 'asc',
+                };
                 if (search.trim()) {
                     params.search = search.trim();
                     nextTitle = 'Search Results';
                 } else if (activeFilter === 'new') {
                     nextTitle = 'New Arrivals';
+                    params.new_only = 'true';
                 }
 
-                loadedBooks = (await booksAPI.getAll(params)).map(normalizeBook);
+                if (filterCategory !== 'all') {
+                    params.category = filterCategory;
+                }
+
+                if (availabilityFilter !== 'all') {
+                    params.availability = availabilityFilter;
+                }
+
+                const response = await booksAPI.getAll(params);
+                loadedBooks = (Array.isArray(response?.items) ? response.items : []).map(normalizeBook);
+                nextPagination = {
+                    page: Number(response?.pagination?.page || page),
+                    limit: Number(response?.pagination?.limit || perPage),
+                    total: Number(response?.pagination?.total || 0),
+                    total_pages: Number(response?.pagination?.total_pages || 0),
+                    has_next: Boolean(response?.pagination?.has_next),
+                    has_prev: Boolean(response?.pagination?.has_prev),
+                };
             }
 
             setBooks(dedupeBooks(loadedBooks));
             setSectionTitle(nextTitle);
+            setPagination(nextPagination);
+
+            if (nextPagination.total_pages > 0 && page > nextPagination.total_pages) {
+                setCurrentPage(nextPagination.total_pages);
+            }
         } catch (error) {
             console.error('Error loading books:', error);
             setBooks([]);
             setSectionTitle('Library Catalog');
+            setPagination({
+                page: 1,
+                limit: perPage,
+                total: 0,
+                total_pages: 0,
+                has_next: false,
+                has_prev: false,
+            });
         } finally {
             setLoading(false);
         }
-    };
+    }, [availabilityFilter, filterCategory, sortBy]);
+
+    useEffect(() => {
+        const query = searchParams.get('q') || '';
+        const activeFilter = searchParams.get('filter') || '';
+        loadBooks({ search: query, activeFilter, page: currentPage, perPage: pageSize });
+    }, [searchParams, currentPage, pageSize, loadBooks]);
 
     const handleSearchSubmit = (event) => {
         event.preventDefault();
@@ -90,35 +225,40 @@ export default function BookCatalog() {
         }
         nextParams.delete('filter');
         setSearchParams(nextParams);
+        setCurrentPage(1);
     };
 
     const handleBookClick = (book) => {
         navigate(`/book/${book.id}`, { state: { book } });
     };
 
+    const handlePageSizeChange = (event) => {
+        const nextSize = Number.parseInt(event.target.value, 10);
+        setPageSize(nextSize === 100 ? 100 : 50);
+        setCurrentPage(1);
+    };
+
+    const goToPreviousPage = () => {
+        setCurrentPage((prevPage) => Math.max(prevPage - 1, 1));
+    };
+
+    const goToNextPage = () => {
+        setCurrentPage((prevPage) => (
+            pagination.total_pages > 0
+                ? Math.min(prevPage + 1, pagination.total_pages)
+                : prevPage + 1
+        ));
+    };
+
     // Apply all filters
-    const filteredBooks = books
-        .filter((book) => {
-            if (activePreset === 'new' && !isBookNewArrival(book)) {
-                return false;
-            }
-            // Category filter
-            if (filterCategory !== 'all' && (book.category || 'Uncategorized') !== filterCategory) {
-                return false;
-            }
-            // Availability filter
-            if (availabilityFilter === 'available') return book.available_copies > 0;
-            if (availabilityFilter === 'checked_out') return book.available_copies <= 0;
-            return true;
-        });
+    const sortedBooks = books;
 
-    const sortedBooks = [...filteredBooks].sort((left, right) => {
-        if (sortBy === 'author') return (left.author || '').localeCompare(right.author || '');
-        if (sortBy === 'year') return (right.publication_year || 0) - (left.publication_year || 0);
-        return (left.title || '').localeCompare(right.title || '');
-    });
-
-    const categories = ['all', ...new Set(books.map((book) => book.category || 'Uncategorized'))];
+    const categoriesSource = allCategories.length > 0
+        ? allCategories
+        : books.map((book) => book.category || 'Uncategorized');
+    const categories = ['all', ...new Set(categoriesSource)];
+    const showingFrom = pagination.total > 0 ? ((pagination.page - 1) * pagination.limit) + 1 : 0;
+    const showingTo = pagination.total > 0 ? Math.min(pagination.page * pagination.limit, pagination.total) : 0;
 
     if (loading && books.length === 0) {
         return (
@@ -327,7 +467,10 @@ export default function BookCatalog() {
                                     <label className="flex items-start gap-3 cursor-pointer group">
                                         <input
                                             checked={availabilityFilter === 'available'}
-                                            onChange={() => setAvailabilityFilter('available')}
+                                            onChange={() => {
+                                                setAvailabilityFilter('available');
+                                                setCurrentPage(1);
+                                            }}
                                             className="mt-0.5 w-4 h-4 border-[#E8E4DF] text-[#c16549] focus:ring-[#c16549]/20 rounded"
                                             name="availability"
                                             type="radio"
@@ -346,7 +489,10 @@ export default function BookCatalog() {
                                     <label className="flex items-start gap-3 cursor-pointer group">
                                         <input
                                             checked={availabilityFilter === 'checked_out'}
-                                            onChange={() => setAvailabilityFilter('checked_out')}
+                                            onChange={() => {
+                                                setAvailabilityFilter('checked_out');
+                                                setCurrentPage(1);
+                                            }}
                                             className="mt-0.5 w-4 h-4 border-[#E8E4DF] text-[#c16549] focus:ring-[#c16549]/20 rounded"
                                             name="availability"
                                             type="radio"
@@ -365,7 +511,10 @@ export default function BookCatalog() {
                                     <label className="flex items-start gap-3 cursor-pointer group">
                                         <input
                                             checked={availabilityFilter === 'all'}
-                                            onChange={() => setAvailabilityFilter('all')}
+                                            onChange={() => {
+                                                setAvailabilityFilter('all');
+                                                setCurrentPage(1);
+                                            }}
                                             className="mt-0.5 w-4 h-4 border-[#E8E4DF] text-[#c16549] focus:ring-[#c16549]/20 rounded"
                                             name="availability"
                                             type="radio"
@@ -392,7 +541,10 @@ export default function BookCatalog() {
                                     <div className="relative">
                                         <select
                                             value={filterCategory}
-                                            onChange={(event) => setFilterCategory(event.target.value)}
+                                            onChange={(event) => {
+                                                setFilterCategory(event.target.value);
+                                                setCurrentPage(1);
+                                            }}
                                             className="appearance-none w-full px-4 py-2.5 pr-10 rounded-sm border border-[#E8E4DF] dark:border-[#3d3935] bg-[#FAF7F2] dark:bg-[#1e1614] text-[#1E1815] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#c16549]/20 focus:border-[#c16549] transition-all cursor-pointer text-sm font-medium"
                                             style={{ fontFamily: "'Noto Sans', sans-serif" }}
                                         >
@@ -417,13 +569,17 @@ export default function BookCatalog() {
                                     <div className="relative">
                                         <select
                                             value={sortBy}
-                                            onChange={(event) => setSortBy(event.target.value)}
+                                            onChange={(event) => {
+                                                setSortBy(event.target.value);
+                                                setCurrentPage(1);
+                                            }}
                                             className="appearance-none w-full px-4 py-2.5 pr-10 rounded-sm border border-[#E8E4DF] dark:border-[#3d3935] bg-[#FAF7F2] dark:bg-[#1e1614] text-[#1E1815] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#c16549]/20 focus:border-[#c16549] transition-all cursor-pointer text-sm font-medium"
                                             style={{ fontFamily: "'Noto Sans', sans-serif" }}
                                         >
                                             <option value="title">By Title</option>
                                             <option value="author">By Author</option>
                                             <option value="year">By Year</option>
+                                            <option value="popular">Most Popular</option>
                                         </select>
                                         <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-[#c16549] pointer-events-none text-[18px]">
                                             expand_more
@@ -437,7 +593,7 @@ export default function BookCatalog() {
                                         style={{ fontFamily: "'Noto Sans', sans-serif" }}>
                                         <span className="material-symbols-outlined text-base">library_books</span>
                                         <span className="font-medium">
-                                            {sortedBooks.length} {sortedBooks.length === 1 ? 'book' : 'books'} found
+                                            {pagination.total} {pagination.total === 1 ? 'book' : 'books'} found
                                         </span>
                                     </div>
                                 </div>
@@ -620,6 +776,55 @@ export default function BookCatalog() {
                                         </div>
                                     </div>
                                 )})}
+                            </div>
+                        )}
+
+                        {pagination.total_pages > 1 && (
+                            <div className="mt-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-t border-[#E8E4DF] dark:border-[#3d3935] pt-6 animate-fade-in-up delay-300">
+                                <div className="text-sm text-[#6B6560] dark:text-gray-400"
+                                    style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                    Showing {showingFrom}-{showingTo} of {pagination.total}
+                                </div>
+
+                                <div className="flex items-center gap-4">
+                                    <label className="flex items-center gap-2 text-xs uppercase tracking-wider text-[#6B6560] dark:text-gray-400"
+                                        style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                        Per page
+                                        <select
+                                            value={pageSize}
+                                            onChange={handlePageSizeChange}
+                                            className="px-2 py-1 rounded-sm border border-[#E8E4DF] dark:border-[#3d3935] bg-white dark:bg-[#2a2622] text-[#1E1815] dark:text-white"
+                                        >
+                                            <option value={50}>50</option>
+                                            <option value={100}>100</option>
+                                        </select>
+                                    </label>
+
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={goToPreviousPage}
+                                            disabled={!pagination.has_prev}
+                                            className="px-3 py-1.5 rounded-sm border border-[#E8E4DF] dark:border-[#3d3935] text-[#1E1815] dark:text-white disabled:opacity-40 disabled:cursor-not-allowed hover:border-[#c16549] transition-colors"
+                                            style={{ fontFamily: "'Noto Sans', sans-serif" }}
+                                        >
+                                            Prev
+                                        </button>
+                                        <span className="text-sm text-[#1E1815] dark:text-white min-w-[110px] text-center"
+                                            style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                            Page {pagination.page} / {pagination.total_pages}
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={goToNextPage}
+                                            disabled={!pagination.has_next}
+                                            className="px-3 py-1.5 rounded-sm border border-[#E8E4DF] dark:border-[#3d3935] text-[#1E1815] dark:text-white disabled:opacity-40 disabled:cursor-not-allowed hover:border-[#c16549] transition-colors"
+                                            style={{ fontFamily: "'Noto Sans', sans-serif" }}
+                                        >
+                                            Next
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         )}
 

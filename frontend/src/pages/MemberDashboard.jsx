@@ -4,7 +4,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import Header from '../components/Header';
 import MyReviewsPanel from '../components/reviews/MyReviewsPanel';
 import { getAuthState } from '../services/authStore';
-import { circulationAPI, recommendationsAPI, authAPI, settingsAPI, reservationsAPI, financialAPI, wishlistAPI } from '../services/api';
+import { circulationAPI, recommendationsAPI, authAPI, settingsAPI, reservationsAPI, financialAPI, wishlistAPI, userLibraryAPI } from '../services/api';
 
 const DAY_MS = 1000 * 60 * 60 * 24;
 
@@ -82,6 +82,10 @@ export default function MemberDashboard() {
     const [readingProfile, setReadingProfile] = useState([]);
     const [wishlistCount, setWishlistCount] = useState(0);
     const [trendingBooks, setTrendingBooks] = useState([]);
+    const [myEbooks, setMyEbooks]           = useState([]);
+    const [uploadingEbook, setUploadingEbook] = useState(false);
+    const [showEbookModal, setShowEbookModal] = useState(false);
+    const [ebookForm, setEbookForm]         = useState({ title: '', author: '', file: null });
 
     const greeting  = getGreeting();
     const firstName = memberProfile?.name?.split(' ')[0] || authState.user?.name?.split(' ')[0] || 'Reader';
@@ -164,9 +168,51 @@ export default function MemberDashboard() {
         }
     }, []);
 
+    const loadMyEbooks = useCallback(async () => {
+        try {
+            const data = await userLibraryAPI.getMy();
+            setMyEbooks(Array.isArray(data) ? data : []);
+        } catch { /* optional feature – stay silent */ }
+    }, []);
+
+    const handleEbookUpload = async (e) => {
+        e.preventDefault();
+        if (!ebookForm.file) return;
+        setUploadingEbook(true);
+        try {
+            const fd = new FormData();
+            fd.append('file', ebookForm.file);
+            fd.append('title', ebookForm.title || ebookForm.file.name.replace(/\.[^/.]+$/, ''));
+            fd.append('author', ebookForm.author || '');
+            await userLibraryAPI.upload(fd);
+            setShowEbookModal(false);
+            setEbookForm({ title: '', author: '', file: null });
+            loadMyEbooks();
+        } catch (err) {
+            alert('Upload failed: ' + (err.message || 'Unknown error'));
+        } finally {
+            setUploadingEbook(false);
+        }
+    };
+
+    const handleEbookDelete = async (id) => {
+        if (!window.confirm('Delete this ebook from your library?')) return;
+        try {
+            await userLibraryAPI.remove(id);
+            setMyEbooks(prev => prev.filter(b => b.id !== id));
+        } catch (err) {
+            alert('Delete failed: ' + (err.message || 'Unknown error'));
+        }
+    };
+
     useEffect(() => {
-        if (authState.isAuthenticated) loadDashboard();
-    }, [authState.isAuthenticated, loadDashboard]);
+
+        if (authState.isAuthenticated) {
+            loadDashboard();
+            loadMyEbooks();
+        }
+    }, [authState.isAuthenticated, loadDashboard, loadMyEbooks]);
+
 
     // Derived stats
     const currentRead = activeLoans[0] || null;
@@ -716,7 +762,143 @@ export default function MemberDashboard() {
                                     <MyReviewsPanel />
                                 </div>
 
-                                {/* Bottom: History + Recommendations - Editorial Layout */}
+                                {/* My E-Books — Personal Upload Library */}
+                                <section className="bg-white dark:bg-[#2a2622] rounded-sm editorial-shadow-lg border border-[#E8E4DF] dark:border-[#3d3935] overflow-hidden animate-fade-in-up delay-400">
+                                    <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-[#c16549] via-[#89332a] to-[#c16549]" />
+                                    <div className="px-8 py-6 flex items-center justify-between border-b border-[#E8E4DF] dark:border-[#3d3935]">
+                                        <h2 className="text-sm font-semibold text-[#c16549] tracking-[0.15em] uppercase flex items-center gap-2"
+                                            style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                            <span className="material-symbols-outlined text-base">import_contacts</span>
+                                            My E-Books
+                                        </h2>
+                                        <button
+                                            onClick={() => setShowEbookModal(true)}
+                                            className="flex items-center gap-1.5 bg-[#c16549] text-white text-xs px-4 py-2 font-semibold hover:bg-[#89332a] transition-colors"
+                                            style={{ fontFamily: "'Noto Sans', sans-serif" }}
+                                        >
+                                            <span className="material-symbols-outlined text-[15px]">upload_file</span>
+                                            Upload PDF/EPUB
+                                        </button>
+                                    </div>
+
+                                    {myEbooks.length === 0 ? (
+                                        <div className="flex flex-col items-center justify-center py-14 text-center px-6">
+                                            <span className="material-symbols-outlined text-5xl text-[#E8E4DF] dark:text-[#3d3935] mb-3">auto_stories</span>
+                                            <p className="text-sm text-[#6B6560] dark:text-gray-400 italic" style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                                You haven't uploaded any ebooks yet.
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-0 divide-y sm:divide-y-0 sm:divide-x divide-[#E8E4DF] dark:divide-[#3d3935]">
+                                            {myEbooks.map((book) => (
+                                                <div key={book.id} className="flex gap-4 p-5 hover:bg-[#FAF7F2] dark:hover:bg-[#3d3935] transition-colors group">
+                                                    <div className="w-10 h-14 rounded-sm shrink-0 bg-gradient-to-br from-[#c16549] to-[#89332a] flex items-center justify-center">
+                                                        <span className="material-symbols-outlined text-white text-[18px]">
+                                                            {book.file_format === 'pdf' ? 'picture_as_pdf' : 'book'}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-sm font-semibold truncate text-[#1E1815] dark:text-white" style={{ fontFamily: "'Newsreader', serif" }}>{book.title}</p>
+                                                        <p className="text-xs text-[#6B6560] dark:text-gray-400 italic truncate" style={{ fontFamily: "'Noto Sans', sans-serif" }}>{book.author || 'Unknown'}</p>
+                                                        <p className="text-[10px] text-[#a09a94] mt-1 uppercase font-bold tracking-wide" style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                                            {book.file_format?.toUpperCase() || 'FILE'}
+                                                            {book.file_size_bytes ? ` · ${(Number(book.file_size_bytes) / (1024 * 1024)).toFixed(1)} MB` : ''}
+                                                        </p>
+                                                        <div className="flex items-center gap-2 mt-2">
+                                                            <a
+                                                                href={userLibraryAPI.getReadUrl(book.id)}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="flex items-center gap-1 text-[10px] font-semibold text-[#c16549] hover:text-[#89332a] transition-colors uppercase tracking-wide"
+                                                                style={{ fontFamily: "'Noto Sans', sans-serif" }}
+                                                            >
+                                                                <span className="material-symbols-outlined text-[13px]">open_in_new</span>
+                                                                Open
+                                                            </a>
+                                                            <span className="text-[#E8E4DF] dark:text-[#3d3935]">·</span>
+                                                            <button
+                                                                onClick={() => handleEbookDelete(book.id)}
+                                                                className="flex items-center gap-1 text-[10px] font-semibold text-[#6B6560] hover:text-red-500 transition-colors uppercase tracking-wide"
+                                                                style={{ fontFamily: "'Noto Sans', sans-serif" }}
+                                                            >
+                                                                <span className="material-symbols-outlined text-[13px]">delete</span>
+                                                                Delete
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </section>
+
+                                {/* Upload Ebook Modal */}
+                                {showEbookModal && (
+                                    <div className="fixed inset-0 bg-black/50 z-[200] flex items-center justify-center p-4">
+                                        <div className="bg-white dark:bg-[#2a2622] w-full max-w-md rounded-sm editorial-shadow-lg border border-[#E8E4DF] dark:border-[#3d3935] overflow-hidden">
+                                            <div className="px-6 py-4 border-b border-[#E8E4DF] dark:border-[#3d3935] flex items-center justify-between">
+                                                <h3 className="text-base font-bold text-[#1E1815] dark:text-white" style={{ fontFamily: "'Newsreader', serif" }}>Upload E-Book</h3>
+                                                <button onClick={() => setShowEbookModal(false)} className="p-1 hover:bg-[#FAF7F2] dark:hover:bg-[#3d3935] rounded-sm transition-colors">
+                                                    <span className="material-symbols-outlined text-[#6B6560]">close</span>
+                                                </button>
+                                            </div>
+                                            <form onSubmit={handleEbookUpload} className="p-6 space-y-4">
+                                                <div>
+                                                    <label className="block text-[10px] font-bold uppercase tracking-[0.15em] text-[#6B6560] mb-2" style={{ fontFamily: "'Noto Sans', sans-serif" }}>File (PDF / EPUB) *</label>
+                                                    <input
+                                                        type="file"
+                                                        accept=".pdf,.epub"
+                                                        required
+                                                        onChange={e => {
+                                                            const f = e.target.files?.[0];
+                                                            if (f) setEbookForm(prev => ({ ...prev, file: f, title: prev.title || f.name.replace(/\.[^/.]+$/, '') }));
+                                                        }}
+                                                        className="w-full text-sm text-[#1E1815] dark:text-white border border-[#E8E4DF] dark:border-[#3d3935] bg-[#FAF7F2] dark:bg-[#3d3935] px-3 py-2 focus:border-[#c16549] focus:outline-none"
+                                                    />
+                                                    {ebookForm.file && <p className="text-xs text-emerald-600 mt-1" style={{ fontFamily: "'Noto Sans', sans-serif" }}>✓ {ebookForm.file.name}</p>}
+                                                </div>
+                                                <div>
+                                                    <label className="block text-[10px] font-bold uppercase tracking-[0.15em] text-[#6B6560] mb-2" style={{ fontFamily: "'Noto Sans', sans-serif" }}>Title *</label>
+                                                    <input
+                                                        type="text"
+                                                        required
+                                                        value={ebookForm.title}
+                                                        onChange={e => setEbookForm(prev => ({ ...prev, title: e.target.value }))}
+                                                        placeholder="Book title"
+                                                        className="w-full px-3 py-2 border border-[#E8E4DF] dark:border-[#3d3935] bg-white dark:bg-[#3d3935] text-sm text-[#1E1815] dark:text-white focus:border-[#c16549] focus:outline-none"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-[10px] font-bold uppercase tracking-[0.15em] text-[#6B6560] mb-2" style={{ fontFamily: "'Noto Sans', sans-serif" }}>Author</label>
+                                                    <input
+                                                        type="text"
+                                                        value={ebookForm.author}
+                                                        onChange={e => setEbookForm(prev => ({ ...prev, author: e.target.value }))}
+                                                        placeholder="Author name (optional)"
+                                                        className="w-full px-3 py-2 border border-[#E8E4DF] dark:border-[#3d3935] bg-white dark:bg-[#3d3935] text-sm text-[#1E1815] dark:text-white focus:border-[#c16549] focus:outline-none"
+                                                    />
+                                                </div>
+                                                <div className="flex gap-3 pt-2">
+                                                    <button type="button" onClick={() => setShowEbookModal(false)}
+                                                        className="flex-1 px-4 py-2.5 border border-[#E8E4DF] dark:border-[#3d3935] text-sm font-semibold text-[#6B6560] hover:bg-[#FAF7F2] dark:hover:bg-[#3d3935] transition-colors"
+                                                        style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                                        Cancel
+                                                    </button>
+                                                    <button type="submit" disabled={uploadingEbook || !ebookForm.file}
+                                                        className="flex-1 px-4 py-2.5 bg-[#c16549] text-white text-sm font-semibold hover:bg-[#89332a] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                                                        style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                                        {uploadingEbook ? (
+                                                            <><span className="animate-spin material-symbols-outlined text-[15px]">sync</span> Uploading…</>
+                                                        ) : (
+                                                            <><span className="material-symbols-outlined text-[15px]">cloud_upload</span> Upload</>
+                                                        )}
+                                                    </button>
+                                                </div>
+                                            </form>
+                                        </div>
+                                    </div>
+                                )}
+
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 lg:gap-10 animate-fade-in-up delay-400">
                                     {/* Borrowing History */}
                                     <div className="lg:col-span-2 flex flex-col bg-white dark:bg-[#2a2622] rounded-sm editorial-shadow p-8 border border-[#E8E4DF] dark:border-[#3d3935]">

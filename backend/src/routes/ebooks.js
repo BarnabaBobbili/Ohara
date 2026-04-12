@@ -2,36 +2,15 @@ import express from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import { fileURLToPath } from 'url';
 import prisma from '../db/prisma.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import { syncEbookToNeo4j } from '../db/neo4j.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { uploadEbook, deleteEbook, getSignedUrl, isSupabasePath } from '../utils/storage.js';
 
 const router = express.Router();
-const uploadsDir = path.join(__dirname, '..', '..', 'uploads', 'ebooks');
-
-const ensureUploadsDir = () => {
-    if (!fs.existsSync(uploadsDir)) {
-        fs.mkdirSync(uploadsDir, { recursive: true });
-    }
-};
-
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        ensureUploadsDir();
-        cb(null, uploadsDir);
-    },
-    filename: (req, file, cb) => {
-        const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-        cb(null, `${uniqueSuffix}${path.extname(file.originalname)}`);
-    },
-});
 
 const upload = multer({
-    storage,
+    storage: multer.memoryStorage(),
     limits: { fileSize: 50 * 1024 * 1024 },
     fileFilter: (req, file, cb) => {
         const ext = path.extname(file.originalname).toLowerCase();
@@ -42,6 +21,30 @@ const upload = multer({
         cb(new Error('Only EPUB and PDF files are allowed'));
     },
 });
+
+const normalizeFormat = (filename) => path.extname(filename || '').slice(1).toLowerCase() || 'pdf';
+
+const streamLegacyFile = (res, ebook) => {
+    if (!ebook.file_path || !fs.existsSync(ebook.file_path)) {
+        res.status(404).json({ detail: 'File not found on disk' });
+        return;
+    }
+    const mime = ebook.file_format === 'pdf' ? 'application/pdf' : 'application/epub+zip';
+    res.setHeader('Content-Type', mime);
+    res.setHeader('Content-Disposition', `inline; filename="${ebook.title}.${ebook.file_format}"`);
+    fs.createReadStream(ebook.file_path).pipe(res);
+};
+
+const removeStoredEbook = async (ebook) => {
+    if (!ebook?.file_path) return;
+    if (isSupabasePath(ebook.file_path)) {
+        await deleteEbook(ebook.file_path);
+        return;
+    }
+    if (fs.existsSync(ebook.file_path)) {
+        fs.unlinkSync(ebook.file_path);
+    }
+};
 
 // ─── Member-Facing Public Ebook Routes ───────────────────────
 
@@ -72,13 +75,13 @@ router.get('/public/:id/read', authenticateToken, async (req, res) => {
         if (!ebook) {
             return res.status(404).json({ detail: 'Ebook not found or not public' });
         }
-        if (!fs.existsSync(ebook.file_path)) {
-            return res.status(404).json({ detail: 'File not found on disk' });
+
+        if (isSupabasePath(ebook.file_path)) {
+            const signedUrl = await getSignedUrl(ebook.file_path);
+            return res.redirect(signedUrl);
         }
-        const mime = ebook.file_format === 'pdf' ? 'application/pdf' : 'application/epub+zip';
-        res.setHeader('Content-Type', mime);
-        res.setHeader('Content-Disposition', `inline; filename="${ebook.title}.${ebook.file_format}"`);
-        fs.createReadStream(ebook.file_path).pipe(res);
+
+        streamLegacyFile(res, ebook);
     } catch (error) {
         res.status(500).json({ detail: error.message });
     }
@@ -114,20 +117,32 @@ router.post('/', authenticateToken, requireAdmin, upload.single('file'), async (
             return res.status(400).json({ detail: 'No file uploaded' });
         }
 
-        const ebook = await prisma.ebooks.create({
-            data: {
-                title: title || file.originalname,
-                author: author || null,
-                book_id: book_id ? Number.parseInt(book_id, 10) : null,
-                file_path: file.path,
-                file_format: path.extname(file.originalname).slice(1).toLowerCase(),
-                file_size_bytes: BigInt(file.size),
-                is_public: is_public === 'true' || is_public === true,
-                uploaded_by: req.staff?.id || null,
-            },
-        });
+        const storagePath = await uploadEbook(file.buffer, file.originalname, 'admin');
+        let ebook;
+        try {
+            ebook = await prisma.ebooks.create({
+                data: {
+                    title: title || file.originalname,
+                    author: author || null,
+                    book_id: book_id ? Number.parseInt(book_id, 10) : null,
+                    file_path: storagePath,
+                    file_format: normalizeFormat(file.originalname),
+                    file_size_bytes: BigInt(file.size),
+                    is_public: is_public === 'true' || is_public === true,
+                    uploaded_by: null, // ebooks.uploaded_by references staff.id; actor is a member record
+                },
+            });
+        } catch (dbError) {
+            await deleteEbook(storagePath);
+            throw dbError;
+        }
 
-        res.status(201).json(ebook);
+        const ebookResponse = {
+            ...ebook,
+            file_size_bytes: ebook.file_size_bytes != null ? Number(ebook.file_size_bytes) : null,
+        };
+
+        res.status(201).json(ebookResponse);
 
         // Sync to Neo4j (non-blocking)
         syncEbookToNeo4j({
@@ -172,9 +187,7 @@ router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
             return res.status(404).json({ detail: 'Ebook not found' });
         }
 
-        if (ebook.file_path && fs.existsSync(ebook.file_path)) {
-            fs.unlinkSync(ebook.file_path);
-        }
+        await removeStoredEbook(ebook);
 
         await prisma.ebooks.delete({
             where: { id: Number.parseInt(req.params.id, 10) },

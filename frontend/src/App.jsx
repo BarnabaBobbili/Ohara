@@ -24,6 +24,7 @@ import CMSManager from './pages/admin/CMSManager';
 import EbookManager from './pages/admin/EbookManager';
 import ContentManager from './pages/admin/ContentManager';
 import ReviewModeration from './pages/admin/ReviewModeration';
+import LoanOverview from './pages/admin/LoanOverview';
 import WishlistPage from './pages/WishlistPage';
 import EbookLibrary from './pages/EbookLibrary';
 
@@ -63,6 +64,7 @@ function App() {
           <Route path="ebooks" element={<EbookManager />} />
           <Route path="reviews" element={<ReviewModeration />} />
           <Route path="content" element={<ContentManager />} />
+          <Route path="loan-overview" element={<LoanOverview />} />
           <Route path="settings" element={<Settings />} />
         </Route>
       </Routes>

@@ -4,7 +4,7 @@ import Header from '../components/Header';
 import WishlistButton from '../components/books/WishlistButton';
 import ReviewSection from '../components/reviews/ReviewSection';
 import StarRating from '../components/reviews/StarRating';
-import { booksAPI, reservationsAPI, auditAPI, recommendationsAPI } from '../services/api';
+import { booksAPI, reservationsAPI, auditAPI, recommendationsAPI, circulationAPI } from '../services/api';
 import { getAuthState } from '../services/authStore';
 import { isBookNewArrival } from '../utils/newArrival';
 
@@ -18,7 +18,12 @@ export default function BookDetail() {
     const [reserveMessage, setReserveMessage] = useState('');
     const [myReservation, setMyReservation] = useState(null);
     const [bookHistory, setBookHistory] = useState([]);
+    const [bookCircHistory, setBookCircHistory] = useState([]);
+    const [bookCircTotal, setBookCircTotal] = useState(0);
+    const [loadingCircHistory, setLoadingCircHistory] = useState(false);
+    const [historyTab, setHistoryTab] = useState('circulation'); // 'circulation' | 'audit'
     const [alsoBorrowed, setAlsoBorrowed] = useState([]);
+    const [similarBooks, setSimilarBooks] = useState([]);
     const [loadingHistory, setLoadingHistory] = useState(false);
 
     const loadBookDetails = useCallback(async () => {
@@ -47,16 +52,79 @@ export default function BookDetail() {
         }
     }, [id]);
 
+    const loadBookCircHistory = useCallback(async () => {
+        setLoadingCircHistory(true);
+        try {
+            const data = await circulationAPI.getBookHistory(id, { limit: 15 });
+            setBookCircHistory(Array.isArray(data?.transactions) ? data.transactions : []);
+            setBookCircTotal(data?.total ?? 0);
+        } catch {
+            // Admin API may be unavailable for non-admin visitors; silently skip
+            setBookCircHistory([]);
+        } finally {
+            setLoadingCircHistory(false);
+        }
+    }, [id]);
+
     useEffect(() => {
+        let active = true;
+
         if (!book || String(book.id) !== id) {
             loadBookDetails();
         }
         loadBookHistory();
+        loadBookCircHistory();
+
         if (id) {
-            recommendationsAPI.getAlsoBorrowed(Number(id), 6)
-                .then(r => setAlsoBorrowed(Array.isArray(r) ? r : []))
-                .catch(() => {});
+            const currentBookId = Number(id);
+            Promise.allSettled([
+                recommendationsAPI.getAlsoBorrowed(currentBookId, 6),
+                recommendationsAPI.getRelated(currentBookId, 10),
+            ]).then(([alsoBorrowedResult, relatedResult]) => {
+                const normalizeBookId = (entry) => Number(entry?.id ?? entry?.book_id);
+
+                const alsoBorrowedRaw = alsoBorrowedResult.status === 'fulfilled' && Array.isArray(alsoBorrowedResult.value)
+                    ? alsoBorrowedResult.value
+                    : [];
+                const normalizedAlsoBorrowed = alsoBorrowedRaw.filter((entry) => {
+                    const relatedBookId = normalizeBookId(entry);
+                    return Number.isInteger(relatedBookId) && relatedBookId !== currentBookId;
+                });
+                if (!active) return;
+                setAlsoBorrowed(normalizedAlsoBorrowed.slice(0, 6));
+
+                const excludedIds = new Set(normalizedAlsoBorrowed.map((entry) => normalizeBookId(entry)));
+                const relatedRaw = relatedResult.status === 'fulfilled' && Array.isArray(relatedResult.value)
+                    ? relatedResult.value
+                    : [];
+
+                const dedupedSimilar = [];
+                const seenIds = new Set();
+                for (const entry of relatedRaw) {
+                    const relatedBookId = normalizeBookId(entry);
+                    if (!Number.isInteger(relatedBookId)) continue;
+                    if (relatedBookId === currentBookId) continue;
+                    if (excludedIds.has(relatedBookId)) continue;
+                    if (seenIds.has(relatedBookId)) continue;
+                    seenIds.add(relatedBookId);
+                    dedupedSimilar.push(entry);
+                    if (dedupedSimilar.length >= 6) break;
+                }
+                if (!active) return;
+                setSimilarBooks(dedupedSimilar);
+            }).catch(() => {
+                if (!active) return;
+                setAlsoBorrowed([]);
+                setSimilarBooks([]);
+            });
+        } else {
+            setAlsoBorrowed([]);
+            setSimilarBooks([]);
         }
+
+        return () => {
+            active = false;
+        };
     }, [book, id, loadBookDetails, loadBookHistory]);
 
     useEffect(() => {
@@ -133,6 +201,12 @@ export default function BookDetail() {
             day: 'numeric',
             year: 'numeric'
         });
+    };
+
+    const getSimilarityReasonLabel = (reason) => {
+        if (reason === 'same_author') return 'Same Author';
+        if (reason === 'same_category') return 'Same Category';
+        return 'Similar Pick';
     };
 
     if (loading) {
@@ -547,54 +621,123 @@ export default function BookDetail() {
                             </div>
                         </div>
 
-                        {/* Right: Activity Timeline */}
+                        {/* Right: Activity & Circulation History */}
                         <div className="lg:col-span-4 animate-fade-in-up delay-400">
                             <div className="sticky top-32">
-                                <h3 className="text-xs font-semibold text-[#c16549] uppercase tracking-[0.15em] mb-6"
+                                <h3 className="text-xs font-semibold text-[#c16549] uppercase tracking-[0.15em] mb-4"
                                     style={{ fontFamily: "'Noto Sans', sans-serif" }}>
-                                    Recent Activity
+                                    Book History
                                 </h3>
-                                
-                                <div className="bg-white dark:bg-[#2a2622] rounded-sm editorial-shadow p-6 border border-[#E8E4DF] dark:border-[#3d3935]">
-                                    {loadingHistory ? (
-                                        <div className="flex items-center justify-center py-8">
-                                            <div className="animate-spin rounded-full h-8 w-8 border-2 border-[#E8E4DF] border-t-[#c16549]"></div>
-                                        </div>
-                                    ) : bookHistory.length === 0 ? (
-                                        <div className="text-center py-8">
-                                            <span className="material-symbols-outlined text-4xl text-[#E8E4DF] dark:text-[#3d3935] mb-3 block">
-                                                history
-                                            </span>
-                                            <p className="text-sm text-[#6B6560] dark:text-gray-400 italic"
-                                                style={{ fontFamily: "'Noto Sans', sans-serif" }}>
-                                                No activity recorded yet
-                                            </p>
-                                        </div>
-                                    ) : (
-                                        <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
-                                            {bookHistory.map((activity, idx) => (
-                                                <div key={idx} className="flex gap-3 pb-4 border-b border-[#E8E4DF] dark:border-[#3d3935] last:border-0 last:pb-0">
-                                                    <div className="shrink-0 w-8 h-8 rounded-full bg-[#f4ede8] dark:bg-[#3d3935] flex items-center justify-center">
-                                                        <span className="material-symbols-outlined text-[#c16549] text-[16px]">
-                                                            {activity.action === 'create' ? 'add_circle' : 
-                                                             activity.action === 'update' ? 'edit' : 
-                                                             activity.action === 'checkout' ? 'logout' : 
-                                                             activity.action === 'checkin' ? 'login' : 'history'}
-                                                        </span>
+
+                                {/* History sub-tabs */}
+                                <div className="flex border-b border-[#E8E4DF] dark:border-[#3d3935] mb-4">
+                                    {[{ id: 'circulation', label: 'Loans', icon: 'swap_horiz' }, { id: 'audit', label: 'Audit Log', icon: 'history' }].map(t => (
+                                        <button key={t.id} onClick={() => setHistoryTab(t.id)}
+                                            className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold border-b-2 transition-all ${
+                                                historyTab === t.id ? 'border-[#c16549] text-[#c16549]' : 'border-transparent text-[#6B6560] hover:text-[#1E1815]'
+                                            }`}
+                                            style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                            <span className="material-symbols-outlined text-[15px]">{t.icon}</span>
+                                            {t.label}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                <div className="bg-white dark:bg-[#2a2622] rounded-sm editorial-shadow border border-[#E8E4DF] dark:border-[#3d3935] overflow-hidden">
+
+                                    {/* Circulation (loans) panel */}
+                                    {historyTab === 'circulation' && (
+                                        loadingCircHistory ? (
+                                            <div className="flex items-center justify-center py-10">
+                                                <div className="animate-spin rounded-full h-8 w-8 border-2 border-[#E8E4DF] border-t-[#c16549]"></div>
+                                            </div>
+                                        ) : bookCircHistory.length === 0 ? (
+                                            <div className="text-center py-10 px-4">
+                                                <span className="material-symbols-outlined text-4xl text-[#E8E4DF] dark:text-[#3d3935] mb-3 block">swap_horiz</span>
+                                                <p className="text-sm text-[#6B6560] dark:text-gray-400 italic"
+                                                    style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                                    No loan records yet
+                                                </p>
+                                            </div>
+                                        ) : (
+                                            <div>
+                                                {bookCircTotal > 0 && (
+                                                    <div className="px-4 py-2.5 bg-[#FAF7F2] dark:bg-[#2a2622] border-b border-[#E8E4DF] dark:border-[#3d3935] flex items-center justify-between">
+                                                        <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B6560]" style={{ fontFamily: "'Noto Sans', sans-serif" }}>Total loans</span>
+                                                        <span className="text-sm font-bold text-[#1E1815] dark:text-white">{bookCircTotal}</span>
                                                     </div>
-                                                    <div className="flex-1 min-w-0">
-                                                        <p className="text-sm font-medium text-[#1E1815] dark:text-white capitalize mb-0.5"
-                                                            style={{ fontFamily: "'Noto Sans', sans-serif" }}>
-                                                            {activity.action?.replace('_', ' ') || 'Activity'}
-                                                        </p>
-                                                        <p className="text-xs text-[#6B6560] dark:text-gray-400"
-                                                            style={{ fontFamily: "'Noto Sans', sans-serif" }}>
-                                                            {formatDate(activity.timestamp || activity.created_at)}
-                                                        </p>
-                                                    </div>
+                                                )}
+                                                <div className="divide-y divide-[#E8E4DF] dark:divide-[#3d3935] max-h-[420px] overflow-y-auto">
+                                                    {bookCircHistory.map((tx) => {
+                                                        const isReturned = tx.status === 'returned';
+                                                        const isOverdue  = tx.status === 'overdue' || (tx.status === 'checked_out' && tx.due_date && new Date(tx.due_date) < new Date());
+                                                        const statusColor = isReturned ? 'text-emerald-600' : isOverdue ? 'text-red-600' : 'text-blue-600';
+                                                        const statusLabel = isReturned ? 'Returned' : isOverdue ? 'Overdue' : 'Active';
+                                                        return (
+                                                            <div key={tx.id} className="px-4 py-3 hover:bg-[#FAF7F2] dark:hover:bg-[#3d3935] transition-colors">
+                                                                <div className="flex items-center justify-between mb-1">
+                                                                    <p className="text-sm font-semibold text-[#1E1815] dark:text-white truncate" style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                                                        {tx.members?.name || `Member #${tx.member_id}`}
+                                                                    </p>
+                                                                    <span className={`text-[10px] font-bold uppercase ${statusColor}`} style={{ fontFamily: "'Noto Sans', sans-serif" }}>{statusLabel}</span>
+                                                                </div>
+                                                                <div className="text-xs text-[#6B6560] dark:text-gray-400 space-y-0.5" style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                                                    <p>Out: {tx.checkout_date ? formatDate(tx.checkout_date) : '—'}</p>
+                                                                    {tx.return_date
+                                                                        ? <p className="text-emerald-600">Returned: {formatDate(tx.return_date)}</p>
+                                                                        : <p className={isOverdue ? 'text-red-600 font-semibold' : ''}>Due: {tx.due_date ? formatDate(tx.due_date) : '—'}</p>
+                                                                    }
+                                                                    {Number.parseFloat(tx.fine_amount || 0) > 0 && (
+                                                                        <p className="text-red-600 font-semibold">Fine: ${Number.parseFloat(tx.fine_amount).toFixed(2)}</p>
+                                                                    )}
+                                                                    {tx.members?.card_id && <p className="text-[#a09a94]">Card: {tx.members.card_id}</p>}
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
                                                 </div>
-                                            ))}
-                                        </div>
+                                            </div>
+                                        )
+                                    )}
+
+                                    {/* Audit log panel */}
+                                    {historyTab === 'audit' && (
+                                        loadingHistory ? (
+                                            <div className="flex items-center justify-center py-10">
+                                                <div className="animate-spin rounded-full h-8 w-8 border-2 border-[#E8E4DF] border-t-[#c16549]"></div>
+                                            </div>
+                                        ) : bookHistory.length === 0 ? (
+                                            <div className="text-center py-10 px-4">
+                                                <span className="material-symbols-outlined text-4xl text-[#E8E4DF] dark:text-[#3d3935] mb-3 block">history</span>
+                                                <p className="text-sm text-[#6B6560] dark:text-gray-400 italic"
+                                                    style={{ fontFamily: "'Noto Sans', sans-serif" }}>No audit events recorded yet</p>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-0 divide-y divide-[#E8E4DF] dark:divide-[#3d3935] max-h-[420px] overflow-y-auto p-4">
+                                                {bookHistory.map((activity, idx) => (
+                                                    <div key={idx} className="flex gap-3 py-3 first:pt-0 last:pb-0">
+                                                        <div className="shrink-0 w-8 h-8 rounded-full bg-[#f4ede8] dark:bg-[#3d3935] flex items-center justify-center">
+                                                            <span className="material-symbols-outlined text-[#c16549] text-[16px]">
+                                                                {activity.action === 'create' ? 'add_circle' :
+                                                                 activity.action === 'update' ? 'edit' :
+                                                                 activity.action === 'checkout' ? 'logout' :
+                                                                 activity.action === 'checkin' ? 'login' : 'history'}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="text-sm font-medium text-[#1E1815] dark:text-white capitalize mb-0.5"
+                                                                style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                                                {activity.action?.replace('_', ' ') || 'Activity'}
+                                                            </p>
+                                                            <p className="text-xs text-[#6B6560] dark:text-gray-400"
+                                                                style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                                                {formatDate(activity.timestamp || activity.created_at)}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )
                                     )}
                                 </div>
                             </div>
@@ -642,6 +785,54 @@ export default function BookDetail() {
                                                 style={{ fontFamily: "'Newsreader', serif" }}>{b.title}</p>
                                             <p className="text-[10px] text-[#6B6560] dark:text-gray-400 italic mt-0.5"
                                                 style={{ fontFamily: "'Noto Sans', sans-serif" }}>{b.author || 'Unknown'}</p>
+                                        </div>
+                                    </Link>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Similar Books (Author/Category) */}
+                    {similarBooks.length > 0 && (
+                        <div className="border-t border-[#E8E4DF] dark:border-[#3d3935] pt-12 mb-8 animate-fade-in-up delay-400">
+                            <div className="flex items-center gap-3 mb-2">
+                                <div className="h-px bg-[#c16549] w-8" />
+                                <h3 className="text-[10px] font-bold tracking-[0.15em] uppercase text-[#c16549]"
+                                    style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                    Similar Books
+                                </h3>
+                            </div>
+                            <p className="text-sm text-[#6B6560] dark:text-gray-400 mb-6 italic"
+                                style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                Recommended based on author and category similarity
+                            </p>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">
+                                {similarBooks.map((b) => (
+                                    <Link
+                                        key={b.id || b.book_id}
+                                        to={`/book/${b.id || b.book_id}`}
+                                        className="group flex flex-col gap-2 cursor-pointer"
+                                    >
+                                        <div className="aspect-[2/3] bg-[#E8E4DF] dark:bg-[#3d3935] rounded-sm overflow-hidden">
+                                            {b.cover_image_url ? (
+                                                <img src={b.cover_image_url} alt={b.title}
+                                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                                            ) : (
+                                                <div className="w-full h-full bg-gradient-to-br from-[#89332a] to-[#c16549] flex items-center justify-center p-2">
+                                                    <p className="text-white/90 text-[10px] font-bold text-center leading-tight"
+                                                        style={{ fontFamily: "'Newsreader', serif" }}>{b.title}</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-bold text-[#1E1815] dark:text-white line-clamp-2 group-hover:text-[#c16549] transition-colors"
+                                                style={{ fontFamily: "'Newsreader', serif" }}>{b.title}</p>
+                                            <p className="text-[10px] text-[#6B6560] dark:text-gray-400 italic mt-0.5"
+                                                style={{ fontFamily: "'Noto Sans', sans-serif" }}>{b.author || 'Unknown'}</p>
+                                            <span className="inline-block mt-1.5 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.1em] text-[#c16549] bg-[#f4ede8] dark:bg-[#3d3935] rounded-sm"
+                                                style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                                {getSimilarityReasonLabel(b.reason)}
+                                            </span>
                                         </div>
                                     </Link>
                                 ))}

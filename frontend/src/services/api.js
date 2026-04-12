@@ -70,6 +70,7 @@ export const booksAPI = {
         const queryParams = new URLSearchParams(params).toString();
         return fetchAPI(`/books?${queryParams}`);
     },
+    getCategories: () => fetchAPI('/books/meta/categories'),
     getById:    (id) => fetchAPI(`/books/${id}`),
     getByISBN:  (isbn) => fetchAPI(`/books/isbn/${isbn}`),
     create: (bookData) => fetchAPI('/books', {
@@ -132,6 +133,10 @@ export const circulationAPI = {
     getOverdue:            () => fetchAPI('/circulation/overdue', { headers: getAdminAuthHeaders() }),
     getRecentReturns: (limit = 12) => fetchAPI(`/circulation/recent-returns?limit=${limit}`, { headers: getAdminAuthHeaders() }),
     getMemberTransactions: (memberId) => fetchAPI(`/circulation/member/${memberId}`, { headers: getAdminAuthHeaders() }),
+    getBookHistory: (bookId, params = {}) => {
+        const queryParams = new URLSearchParams(params).toString();
+        return fetchAPI(`/circulation/book/${bookId}${queryParams ? `?${queryParams}` : ''}`, { headers: getAdminAuthHeaders() });
+    },
 };
 
 // ============= Dashboard API =============
@@ -359,6 +364,29 @@ export const ebooksAPI = {
     }),
 };
 
+// ============= User Library API (Member) =============
+
+export const userLibraryAPI = {
+    // List the logged-in member's own uploaded ebooks
+    getMy: () => fetchAPI('/user-library/my', { headers: getMemberAuthHeaders() }),
+
+    // Upload an ebook (pass FormData with 'file', 'title', 'author' fields)
+    upload: (formData) => fetchAPI('/user-library/upload', {
+        method: 'POST',
+        body: formData,
+        headers: getMemberAuthHeaders(),
+    }),
+
+    // Delete own ebook
+    remove: (bookId) => fetchAPI(`/user-library/my/${bookId}`, {
+        method: 'DELETE',
+        headers: getMemberAuthHeaders(),
+    }),
+
+    // Build a streaming URL for own ebook (open in new tab / iframe)
+    getReadUrl: (bookId) => `${API_BASE_URL}/user-library/my/${bookId}/read`,
+};
+
 // ============= Health Check =============
 
 export const healthAPI = {
@@ -439,6 +467,7 @@ export default {
     financial:       financialAPI,
     staffBoard:      staffBoardAPI,
     ebooks:          ebooksAPI,
+    userLibrary:     userLibraryAPI,
     health:          healthAPI,
     auth:            authAPI,
     announcements:   announcementsAPI,

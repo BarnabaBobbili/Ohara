@@ -437,4 +437,37 @@ router.get('/member/:memberId', authenticateToken, requireStaff, async (req, res
     }
 });
 
+// GET /circulation/book/:bookId — full circulation history for a specific book (staff only)
+router.get('/book/:bookId', authenticateToken, requireStaff, async (req, res) => {
+    try {
+        const bookId = Number.parseInt(req.params.bookId, 10);
+        if (!Number.isFinite(bookId)) {
+            return res.status(400).json({ detail: 'Invalid book ID' });
+        }
+
+        const { skip, limit } = parseSkipLimitPagination(req.query, {
+            defaultLimit: 50,
+            maxLimit: 200,
+            maxSkip: 5000,
+        });
+
+        const [transactions, total] = await Promise.all([
+            prisma.transactions.findMany({
+                where: { book_id: bookId },
+                include: {
+                    members: { select: { name: true, card_id: true, email: true } },
+                },
+                orderBy: { checkout_date: 'desc' },
+                skip,
+                take: limit,
+            }),
+            prisma.transactions.count({ where: { book_id: bookId } }),
+        ]);
+
+        res.json({ transactions, total });
+    } catch (error) {
+        res.status(500).json({ detail: error.message });
+    }
+});
+
 export default router;

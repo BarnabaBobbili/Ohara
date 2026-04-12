@@ -15,7 +15,9 @@
         "prisma:migrate:dev": "prisma migrate dev",
         "prisma:migrate:deploy": "prisma migrate deploy",
         "prisma:migrate:status": "prisma migrate status",
-        "prisma:studio": "prisma studio"
+        "prisma:studio": "prisma studio",
+        "seed:library-data": "node seed-library-data.js",
+        "seed:site-content": "node seed-site-content.js"
     },
     "keywords": [
         "library",
@@ -26,6 +28,7 @@
     "author": "",
     "license": "MIT",
     "dependencies": {
+        "@supabase/supabase-js": "^2.49.8",
         "@prisma/adapter-pg": "^7.4.0",
         "@prisma/client": "^7.4.0",
         "axios": "^1.13.5",

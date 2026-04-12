@@ -19,6 +19,14 @@ const parseNonNegativeInteger = (value) => {
     return parsed;
 };
 
+const parsePositiveInteger = (value) => {
+    const parsed = Number.parseInt(value, 10);
+    if (!Number.isFinite(parsed) || parsed <= 0) return null;
+    return parsed;
+};
+
+const clampInteger = (value, min, max) => Math.min(Math.max(value, min), max);
+
 const isMissingBookRatingsTableError = (error) => {
     if (!error) return false;
     if (error.code === 'P2021') return true;
@@ -84,14 +92,39 @@ const attachRatingMetadata = async (items) => {
 
 router.get('/', async (req, res) => {
     try {
-        const { category, search, genre, language, is_active } = req.query;
-        const { skip, limit } = parseSkipLimitPagination(req.query, {
-            defaultLimit: 20,
-            maxLimit: 100,
-            maxSkip: 5000,
-        });
+        const {
+            category,
+            search,
+            genre,
+            language,
+            is_active,
+            availability,
+            sort_by,
+            sort_order,
+            page,
+            paginate,
+            new_only,
+        } = req.query;
+
+        const shouldPaginate = paginate === 'true' || page !== undefined;
+        const requestedLimit = parsePositiveInteger(req.query?.limit);
+        const limit = clampInteger(
+            requestedLimit ?? (shouldPaginate ? 50 : 20),
+            1,
+            100
+        );
+        const requestedPage = parsePositiveInteger(page);
+        const currentPage = clampInteger(requestedPage ?? 1, 1, 100000);
+        const skip = shouldPaginate
+            ? (currentPage - 1) * limit
+            : parseSkipLimitPagination(req.query, {
+                defaultLimit: 20,
+                maxLimit: 100,
+                maxSkip: 5000,
+            }).skip;
 
         const where = {};
+        const andClauses = [];
         
         // Only show active books by default
         if (is_active !== 'false') {
@@ -110,22 +143,96 @@ router.get('/', async (req, res) => {
             where.language = language;
         }
 
+        if (availability === 'available') {
+            where.available_copies = { gt: 0 };
+        } else if (availability === 'checked_out') {
+            where.available_copies = { lte: 0 };
+        }
+
         if (search) {
-            where.OR = [
+            andClauses.push({
+                OR: [
                 { title: { contains: search, mode: 'insensitive' } },
                 { author: { contains: search, mode: 'insensitive' } },
                 { isbn: { contains: search, mode: 'insensitive' } },
-            ];
+                ],
+            });
+        }
+
+        if (new_only === 'true') {
+            const recentAddedDate = new Date();
+            recentAddedDate.setDate(recentAddedDate.getDate() - 120);
+            const recentPublicationYear = new Date().getFullYear() - 1;
+
+            andClauses.push({
+                OR: [
+                    { created_at: { gte: recentAddedDate } },
+                    { publication_year: { gte: recentPublicationYear } },
+                ],
+            });
+        }
+
+        if (andClauses.length > 0) {
+            where.AND = andClauses;
+        }
+
+        const sortFieldMap = {
+            title: 'title',
+            author: 'author',
+            year: 'publication_year',
+            publication_year: 'publication_year',
+            popular: 'popular',
+            created_at: 'created_at',
+            updated_at: 'updated_at',
+        };
+        const resolvedSortField = sortFieldMap[String(sort_by || '').toLowerCase()] || 'updated_at';
+        const resolvedSortOrder = ['asc', 'desc'].includes(String(sort_order || '').toLowerCase())
+            ? String(sort_order).toLowerCase()
+            : (resolvedSortField === 'title' || resolvedSortField === 'author' ? 'asc' : 'desc');
+
+        const orderBy = resolvedSortField === 'popular'
+            ? [
+                { transactions: { _count: 'desc' } },
+                { updated_at: 'desc' },
+                { id: 'asc' },
+            ]
+            : { [resolvedSortField]: resolvedSortOrder };
+
+        if (shouldPaginate) {
+            const [total, books] = await Promise.all([
+                prisma.books.count({ where }),
+                prisma.books.findMany({
+                    where,
+                    skip,
+                    take: limit,
+                    orderBy,
+                }),
+            ]);
+
+            const items = await attachRatingMetadata(books);
+            const totalPages = total > 0 ? Math.ceil(total / limit) : 0;
+
+            return res.json({
+                items,
+                pagination: {
+                    page: currentPage,
+                    limit,
+                    total,
+                    total_pages: totalPages,
+                    has_next: totalPages > 0 && currentPage < totalPages,
+                    has_prev: currentPage > 1,
+                },
+            });
         }
 
         const books = await prisma.books.findMany({
             where,
             skip,
             take: limit,
-            orderBy: { updated_at: 'desc' },
+            orderBy,
         });
 
-        res.json(await attachRatingMetadata(books));
+        return res.json(await attachRatingMetadata(books));
     } catch (error) {
         res.status(500).json({ detail: error.message });
     }
@@ -142,6 +249,28 @@ router.get('/isbn/:isbn', async (req, res) => {
         }
 
         res.json(await attachRatingMetadata(book));
+    } catch (error) {
+        res.status(500).json({ detail: error.message });
+    }
+});
+
+router.get('/meta/categories', async (req, res) => {
+    try {
+        const rows = await prisma.books.findMany({
+            where: {
+                is_active: true,
+                category: { not: null },
+            },
+            distinct: ['category'],
+            select: { category: true },
+            orderBy: { category: 'asc' },
+        });
+
+        const categories = rows
+            .map((row) => row.category)
+            .filter((category) => Boolean(category));
+
+        res.json(categories);
     } catch (error) {
         res.status(500).json({ detail: error.message });
     }

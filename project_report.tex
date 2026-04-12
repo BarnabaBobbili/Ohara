@@ -1,0 +1,1148 @@
+\documentclass[12pt,a4paper]{report}
+
+\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{setspace}
+\usepackage{hyperref}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{listings}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue!60!black,
+    urlcolor=blue!60!black,
+    pdftitle={Library Management System Project Report},
+    pdfauthor={Project Team},
+    pdfsubject={Database Management Systems Project Report}
+}
+
+\setstretch{1.2}
+\setlength{\parskip}{0.4em}
+\setlength{\parindent}{0pt}
+
+\definecolor{codebg}{RGB}{248,248,248}
+\definecolor{codecomment}{RGB}{0,128,0}
+\definecolor{codekeyword}{RGB}{0,0,180}
+\definecolor{codestring}{RGB}{163,21,21}
+
+\lstdefinestyle{projectcode}{
+    backgroundcolor=\color{codebg},
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    columns=fullflexible,
+    commentstyle=\color{codecomment},
+    frame=single,
+    keywordstyle=\color{codekeyword}\bfseries,
+    numbers=left,
+    numbersep=8pt,
+    numberstyle=\tiny\color{gray},
+    showstringspaces=false,
+    stringstyle=\color{codestring},
+    tabsize=2
+}
+
+\lstset{style=projectcode}
+
+\newcommand{\InstitutionName}{[Institution Name]}
+\newcommand{\DepartmentName}{[Department Name]}
+\newcommand{\StudentName}{[Student Name]}
+\newcommand{\RollNumber}{[Roll Number]}
+\newcommand{\GuideName}{[Guide Name]}
+\newcommand{\AcademicYear}{2025--2026}
+\newcommand{\SubmissionMonth}{April 2026}
+
+\begin{document}
+
+\begin{titlepage}
+  \centering
+
+  {\tnr\fontsize{16}{12}\selectfont LIBRARY MANAGEMENT SYSTEM }
+
+  \vspace{0.3cm}
+  {\tnr\fontsize{15}{14}\selectfont
+  Project Report\par
+  submitted in partial fulfilment for the degree of\par
+  Master of Technology\par
+  Under the\par
+  Faculty of Engineering\par
+  }
+
+  \vspace{1.0cm}
+  {\tnr\fontsize{14}{17}\selectfont\itshape Submitted by\par}
+
+  \vspace{0.5cm}
+  {\calibriLight\fontsize{13}{14}\selectfont BARNABA BOBBILI\par}
+  {\calibriLight\fontsize{13}{14}\selectfont CB.SC.P2CSE25002\par}
+
+  \vspace{0.9cm}
+  \includegraphics[width=15.67cm,height=4.0cm]{Picture1.jpg}
+
+  \vspace{0.9cm}
+  {\tnr\fontsize{15}{18}\selectfont
+  DEPARTMENT OF COMPUTER SCIENCE AND ENGINEERING\par
+  AMRITA SCHOOL OF COMPUTING,\par
+  AMRITA VISHWA VIDYAPEETHAM,\par
+  }
+
+  \vfill
+  {\tnr\fontsize{15}{18}\selectfont APRIL, 2026\par}
+  {\tnr\fontsize{15}{18}\selectfont COIMBATORE CAMPUS\par}
+
+  \end{titlepage}
+
+\pagenumbering{arabic}
+
+\tableofcontents
+\listoftables
+
+\chapter{Introduction}
+\section{Background}
+Libraries manage multiple categories of information simultaneously: bibliographic records, copy-level inventory, member records, lending transactions, reservations, financial dues, administrative content, audit logs, and user engagement data. Traditional single-database implementations often store all of these concerns in one relational schema, but that approach can make some workloads inefficient. Transaction processing, document-heavy content, analytics, and recommendation graphs have different access patterns and modelling needs.
+
+This project addresses that challenge by implementing a \textbf{Library Management System} using a polyglot data architecture. Instead of forcing every module into one storage model, the application assigns each workload to the database technology that best matches its characteristics.
+
+\section{Problem Statement}
+The problem addressed by the project is the lack of an integrated institution-scale library application that simultaneously provides:
+\begin{itemize}[leftmargin=1.5em]
+    \item accurate relational transaction handling for borrowing and reservations,
+    \item traceable administrative and financial records,
+    \item flexible content and activity storage,
+    \item graph-based recommendation capabilities,
+    \item role-aware access for members, staff, and administrators,
+    \item and a unified web interface for both public and administrative use.
+\end{itemize}
+
+\section{Objectives}
+The major objectives of the project are:
+\begin{enumerate}[leftmargin=1.5em]
+    \item To build a centralized digital platform for managing books, members, staff, and circulation transactions.
+    \item To automate critical library workflows such as checkout, return, fine processing, reservation creation, and dashboard reporting.
+    \item To demonstrate the practical application of polyglot persistence in a realistic database systems project.
+    \item To maintain auditability, data quality, and role-based control across administrative operations.
+    \item To support enhanced member experience through reviews, wishlist, ebooks, and personalized recommendations.
+    \item To provide a maintainable architecture with clear separation between frontend, backend, and database layers.
+\end{enumerate}
+
+\section{Scope of the Project}
+The implemented system covers:
+\begin{itemize}[leftmargin=1.5em]
+    \item public catalog browsing and book detail pages,
+    \item member authentication and dashboard access,
+    \item librarian and administrator operations,
+    \item book catalog management,
+    \item member management,
+    \item circulation and return-desk workflows,
+    \item reservation handling,
+    \item analytics and reporting,
+    \item review, rating, and moderation features,
+    \item ebook administration and member digital reading support,
+    \item content management and announcement publishing,
+    \item financial ledger and audit trail management,
+    \item graph-based recommendations.
+\end{itemize}
+
+The current scope does not include inter-library loan exchange, external procurement integration, barcode hardware integration, SMS gateways, or a dedicated mobile application.
+
+\section{Report Conventions}
+The repository contains some internal seed data and UI strings originating from sample branding. The document uses \textbf{professional and generic system terminology} such as ``Library Management System'', ``content management'', ``analytics'', and ``architecture'' throughout so that the presentation remains formal and consistent.
+
+\chapter{Requirements Analysis}
+\section{Stakeholders}
+The key stakeholders of the system are:
+\begin{itemize}[leftmargin=1.5em]
+    \item \textbf{Members}: browse catalog, borrow books, reserve books, view history, manage wishlist, read ebooks, and submit reviews.
+    \item \textbf{Staff/Librarians}: perform checkout and return operations, manage circulation, inspect audit data, and process member requests.
+    \item \textbf{Administrators}: manage books, collections, settings, content, analytics, finances, ebooks, and review moderation.
+    \item \textbf{System Maintainers}: configure databases, monitor health, schedule jobs, and manage deployment settings.
+\end{itemize}
+
+\section{Functional Requirements}
+The project satisfies the following functional requirements:
+\begin{longtable}{p{0.25\textwidth} p{0.68\textwidth}}
+\toprule
+\textbf{Module} & \textbf{Functional Requirements} \\
+\midrule
+\endhead
+Authentication & Member signup, login, token-based session handling, current-user retrieval, and staff access verification. \\
+Catalog Management & Book creation, update, deletion, search, filtering, ISBN lookup, availability display, and category/author metadata management. \\
+Member Management & Member listing, profile retrieval, update, and management of account state and borrowing metadata. \\
+Circulation & Checkout, return, overdue detection, fine computation, recent returns, active loans, and member borrowing history. \\
+Reservations & Reservation creation, queue positioning, expiry tracking, cancellation, and staff-side reservation inspection. \\
+Digital Library & Public ebook listing, admin ebook upload and management, user-uploaded digital books, and reading-progress tracking. \\
+Content Management & Site settings, CMS pages, staff board posts, announcements, and news management. \\
+Reviews and Engagement & Ratings, reviews, comments, replies, likes, moderation, and GIF attachment support. \\
+Analytics & Activity analytics, collection analytics, financial analytics, audit summaries, dashboard aggregation, and comparison reporting. \\
+Recommendations & Popular books, related books, collaborative recommendations, wishlist recommendations, trending books, and category-interest profiling. \\
+Operations & Health reporting, scheduled jobs, execution history, cache statistics, and queue statistics. \\
+\bottomrule
+\end{longtable}
+
+\section{Non-Functional Requirements}
+\subsection{Performance}
+The system requires acceptable response time for catalog browsing, dashboard loading, and administrative screens. To support this:
+\begin{itemize}[leftmargin=1.5em]
+    \item PostgreSQL indexes are created for high-frequency book and transaction access patterns.
+    \item MongoDB aggregation pipelines are used for analytics-heavy workloads.
+    \item Neo4j handles graph traversal for recommendations instead of deeply nested relational joins.
+    \item In-memory caching is used for selected dashboard and report responses.
+\end{itemize}
+
+\subsection{Scalability}
+Scalability is improved through workload separation:
+\begin{itemize}[leftmargin=1.5em]
+    \item transactional data remains in PostgreSQL,
+    \item audit and ledger reporting move to MySQL,
+    \item flexible log and document collections are placed in MongoDB,
+    \item relationship-intensive recommendations are offloaded to Neo4j.
+\end{itemize}
+
+\subsection{Reliability}
+Reliability is addressed through:
+\begin{itemize}[leftmargin=1.5em]
+    \item health-check endpoints,
+    \item connection pooling,
+    \item graceful shutdown,
+    \item asynchronous logging queue with retry control,
+    \item non-blocking secondary-store sync for optional services.
+\end{itemize}
+
+\subsection{Security}
+Security requirements include:
+\begin{itemize}[leftmargin=1.5em]
+    \item JWT-based authentication,
+    \item role-based authorization for member, staff, and admin actions,
+    \item PostgreSQL row-level security support in the schema and migration scripts,
+    \item financial and audit traceability,
+    \item constrained file upload types and file size limits.
+\end{itemize}
+
+\section{Feasibility}
+\subsection{Technical Feasibility}
+The project is technically feasible because it uses mature technologies with strong ecosystem support: React for UI composition, Express for API management, Prisma for relational ORM access, and dedicated database engines for specialized workloads.
+
+\subsection{Operational Feasibility}
+The system is operationally feasible for a college-scale or departmental library setting because it provides admin panels, health status visibility, modular routes, and environment-driven configuration.
+
+\subsection{Economic Feasibility}
+The architecture is based primarily on open-source frameworks and drivers. Managed cloud services can be used, but the implementation also supports local development, which reduces development cost.
+
+\chapter{System Architecture}
+\section{Architectural Overview}
+The system follows a multi-tier architecture:
+\begin{enumerate}[leftmargin=1.5em]
+    \item \textbf{Presentation Layer}: React and Vite frontend.
+    \item \textbf{Application Layer}: Express backend with domain-specific route modules.
+    \item \textbf{Data Access Layer}: Prisma, database drivers, analytics modules, and data-store adapters.
+    \item \textbf{Persistence Layer}: PostgreSQL, MySQL, MongoDB, and Neo4j.
+\end{enumerate}
+
+\section{High-Level Request Flow}
+\begin{enumerate}[leftmargin=1.5em]
+    \item A user interacts with the frontend through public, member, or admin pages.
+    \item The frontend calls REST endpoints exposed by the Express API.
+    \item Middleware performs parsing, authentication, authorization, and error handling.
+    \item Route modules execute business logic using Prisma or dedicated database drivers.
+    \item Responses are returned to the frontend, while selected events are logged asynchronously and some data is synchronized to secondary stores such as Neo4j or MySQL.
+\end{enumerate}
+
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=\textwidth]{architecture_diagram.png}
+    \caption{High-level system architecture of the Library Management System}
+    \label{fig:system-architecture}
+\end{figure}
+
+\section{Frontend Architecture}
+The frontend is built with React and uses route-based navigation through \texttt{react-router-dom}. The interface is divided into public pages, member pages, and admin pages.
+
+\begin{table}[h!]
+\centering
+\begin{tabularx}{\textwidth}{p{0.28\textwidth} X}
+\toprule
+\textbf{Frontend Area} & \textbf{Purpose} \\
+\midrule
+Home page & Public landing page with hero section, collections, live bookshelf, news, philosophy, membership call-to-action, announcement banner, and footer. \\
+Book detail and catalog & Catalog search, per-book information, and browsing experience. \\
+Member dashboard & Active loans, history, reservations, reading profile, recommendations, wishlist count, financial transactions, reviews, and trending books. \\
+Authentication pages & Signup, member login, and admin login. \\
+Collections and wishlist & Curated collection discovery and saved-book management. \\
+Digital reading pages & Ebook library and reader interfaces for PDF/EPUB content. \\
+Admin console & Dashboard, book management, member management, circulation desk, reports, audit trail, CMS manager, content manager, ebook manager, review moderation, and settings. \\
+\bottomrule
+\end{tabularx}
+\caption{Frontend module summary}
+\end{table}
+
+\section{Backend Architecture}
+The backend entry point initializes:
+\begin{itemize}[leftmargin=1.5em]
+    \item PostgreSQL through Prisma and a pooled \texttt{pg} adapter,
+    \item MongoDB connection and index initialization,
+    \item Neo4j driver creation,
+    \item MySQL connection pool,
+    \item dynamic data-store validation,
+    \item scheduled background jobs,
+    \item uploads directory creation,
+    \item health and operational monitoring.
+\end{itemize}
+
+\begin{table}[h!]
+\centering
+\begin{tabularx}{\textwidth}{p{0.28\textwidth} X}
+\toprule
+\textbf{Backend Concern} & \textbf{Implementation Detail} \\
+\midrule
+Framework & Express.js with JSON and URL-encoded body parsing. \\
+Cross-Origin Access & CORS enabled through environment-configurable allowed origins. \\
+Monitoring & Request-duration warning for slow requests exceeding configured thresholds. \\
+Routing & Modular route registration for books, members, circulation, authentication, analytics, content, finances, reviews, recommendations, and jobs. \\
+Error Handling & Dedicated not-found handler and global error handler middleware. \\
+Shutdown & Graceful shutdown for scheduled jobs and all database connections. \\
+\bottomrule
+\end{tabularx}
+\caption{Backend architecture summary}
+\end{table}
+
+\section{Polyglot Persistence Strategy}
+The project uses a deliberate polyglot data model instead of a single database. Table \ref{tab:polyglot} summarizes the strategy.
+
+\begin{table}[h!]
+\centering
+\begin{tabularx}{\textwidth}{p{0.18\textwidth} p{0.24\textwidth} X}
+\toprule
+\textbf{Database} & \textbf{Primary Role} & \textbf{Why It Fits the Workload} \\
+\midrule
+PostgreSQL & Core transactional system & Strong consistency, relational integrity, indexing, structured schema, and support for functions, triggers, and RLS. \\
+MySQL & Audit and finance records & Efficient tabular ledger storage, summary aggregation, and separation of operational reporting from core circulation tables. \\
+MongoDB & Flexible documents and analytics & Stores activity logs, content documents, reviews, and aggregation pipelines for dashboards. \\
+Neo4j & Recommendation graph & Efficient traversal for member-book relationships, co-borrow analysis, category interests, and wishlist-based suggestions. \\
+\bottomrule
+\end{tabularx}
+\caption{Polyglot persistence strategy}
+\label{tab:polyglot}
+\end{table}
+
+\section{Dynamic Data Store Adapter}
+The backend includes a \texttt{DataStoreAdapter} abstraction that can route selected workloads across MongoDB, MySQL, or PostgreSQL using configuration. It is used for activity logs, audit trail, and analytics-related storage settings. This design reduces hardcoded dependencies and improves configurability for experimentation and deployment.
+
+\section{Caching and Asynchronous Logging}
+The backend contains:
+\begin{itemize}[leftmargin=1.5em]
+    \item an in-memory cache for frequently requested report and dashboard fragments,
+    \item prefix-based invalidation after state-changing operations,
+    \item an asynchronous logging queue with bounded size, retry support, and configurable concurrency.
+\end{itemize}
+
+\chapter{Database Design and Data Management}
+\section{PostgreSQL as the System of Record}
+PostgreSQL stores the primary operational schema. The Prisma schema defines structured relational models with indexes, unique constraints, and relationships. Core tables include books, members, staff, transactions, reservations, collections, collection\_books, ebooks, library\_events, site\_settings, reading\_progress, user\_uploaded\_books, and book\_ratings.
+
+\begin{table}[h!]
+\centering
+\begin{tabularx}{\textwidth}{p{0.26\textwidth} X}
+\toprule
+\textbf{Table} & \textbf{Purpose} \\
+\midrule
+books & Master catalog with bibliographic metadata, copy counts, tags, location, edition, format, and activation flags. \\
+members & User identity, profile, account state, borrowing policy, fines, and roles. \\
+transactions & Checkout and return records with dates, conditions, renewal count, fine state, and notes. \\
+reservations & Queue-based reservations with expiry, status, notification state, and position. \\
+staff & Administrative identities, credentials, permissions, and role information. \\
+collections / collection\_books & Curated library groupings and ordered book membership. \\
+ebooks & Managed digital resources uploaded by administrators. \\
+user\_uploaded\_books & Personal digital books uploaded by members. \\
+reading\_progress & Per-user reading position and progress percentage for digital reading. \\
+book\_ratings & Structured numeric ratings associated with members and books. \\
+site\_settings & Runtime key-value configuration for library behaviour and presentation. \\
+library\_events & Public event metadata for the site. \\
+staff\_board\_posts & Internal administrative communication posts. \\
+\bottomrule
+\end{tabularx}
+\caption{Primary PostgreSQL tables}
+\end{table}
+
+\section{PostgreSQL Indexing Strategy}
+The system employs indexing for both correctness and performance:
+\begin{itemize}[leftmargin=1.5em]
+    \item standard B-tree indexes on identifiers, status, dates, categories, and relations,
+    \item partial indexes for active rows and frequently filtered states,
+    \item GIN trigram indexes on title, author, ISBN, and member names for text search,
+    \item composite indexes on transaction status and due date for overdue checks.
+\end{itemize}
+
+\section{PL/pgSQL Functions, Procedures, and Triggers}
+Database-side logic is a major part of the system design.
+
+\subsection{Functions and Procedures}
+The codebase and migration scripts reference the following database-side logic:
+\begin{itemize}[leftmargin=1.5em]
+    \item \texttt{fn\_process\_payment()} for payment settlement and member balance update,
+    \item \texttt{fn\_dashboard\_stats()} for JSON dashboard aggregation,
+    \item \texttt{fn\_expire\_reservations()} for stale reservation maintenance,
+    \item \texttt{sp\_checkout\_book\_advanced()} for validated checkout execution,
+    \item \texttt{sp\_return\_book\_advanced()} for return handling and fine output,
+    \item \texttt{sp\_renew\_loan()} for renewal control,
+    \item \texttt{sp\_mark\_book\_lost()} for lost-book workflows,
+    \item \texttt{sp\_calculate\_overdue\_fines()} for batch fine generation,
+    \item \texttt{sp\_apply\_fine\_waiver()} for administrative waivers,
+    \item \texttt{sp\_process\_payment\_advanced()} for richer payment workflows,
+    \item \texttt{sp\_auto\_suspend\_members()} for penalty enforcement,
+    \item reservation procedures such as \texttt{sp\_create\_reservation()}, \texttt{sp\_fulfill\_next\_reservation()}, \texttt{sp\_cancel\_reservation()}, and \texttt{sp\_expire\_unclaimed\_reservations()}.
+\end{itemize}
+
+\subsection{Triggers}
+The migration file includes database triggers for:
+\begin{itemize}[leftmargin=1.5em]
+    \item automatic \texttt{updated\_at} maintenance,
+    \item inventory count adjustment during checkout and return,
+    \item fine calculation on return events.
+\end{itemize}
+
+\section{MySQL for Audit and Financial Records}
+MySQL stores administrative trace and financial ledger information. The principal tables are:
+\begin{itemize}[leftmargin=1.5em]
+    \item \texttt{audit\_trail}: field-level or event-level changes related to books and circulation,
+    \item \texttt{member\_audit\_log}: member record and PII access changes,
+    \item \texttt{financial\_records}: fine, payment, refund, and waiver ledger entries.
+\end{itemize}
+
+This separation is important because financial and audit records are append-oriented and reporting-heavy. Keeping them apart from the main circulation tables avoids overloading the transactional source of truth.
+
+\section{MongoDB for Flexible Documents and Analytics}
+MongoDB is used in several distinct roles:
+\begin{itemize}[leftmargin=1.5em]
+    \item \texttt{activity\_logs} for user and system activity events,
+    \item \texttt{cms\_pages} for dynamic page-section content,
+    \item \texttt{announcements} for notice publishing,
+    \item \texttt{reviews} and \texttt{review\_reactions} for review features,
+    \item \texttt{analytics} for job history and analytics snapshots.
+\end{itemize}
+
+MongoDB indexes are explicitly created for activity timestamps, action filtering, page and section uniqueness, reviews by book and member, and reaction uniqueness.
+
+\section{Neo4j for Recommendation Graph}
+Neo4j models:
+\begin{itemize}[leftmargin=1.5em]
+    \item nodes: \texttt{Book}, \texttt{Author}, \texttt{Category}, \texttt{Member}, \texttt{Tag}, \texttt{Ebook},
+    \item relationships: \texttt{WRITTEN\_BY}, \texttt{BELONGS\_TO}, \texttt{BORROWED}, \texttt{INTERESTED\_IN}, \texttt{HAS\_TAG}, \texttt{LIKED\_REVIEW\_OF}, \texttt{WISHLISTED}, \texttt{BASED\_ON}, \texttt{UPLOADED}.
+\end{itemize}
+
+Neo4j is treated as a recommendation-oriented read model rather than the transactional source of truth. Synchronization is performed after key PostgreSQL events.
+
+\section{Data Synchronization Model}
+Selected application events update secondary databases:
+\begin{itemize}[leftmargin=1.5em]
+    \item new or updated books are synchronized to Neo4j,
+    \item member signup is synchronized to Neo4j,
+    \item checkout and return operations create graph edges or update relationship state,
+    \item payment and fine events are logged to MySQL,
+    \item activity events are inserted into MongoDB asynchronously,
+    \item ebook uploads are synchronized to Neo4j.
+\end{itemize}
+
+These synchronizations are intentionally non-blocking where possible, so that optional analytics or recommendation services do not prevent completion of the primary user workflow.
+
+\chapter{Module Design and Implementation}
+\section{Authentication and Authorization}
+Authentication is JWT-based. The middleware supports two token sources:
+\begin{itemize}[leftmargin=1.5em]
+    \item Supabase-style JWTs using \texttt{SUPABASE\_JWT\_SECRET},
+    \item legacy application JWTs using \texttt{SECRET\_KEY}.
+\end{itemize}
+
+Authorization is role-sensitive. All users are resolved from the \texttt{members} table, and the middleware exposes:
+\begin{itemize}[leftmargin=1.5em]
+    \item \texttt{requireMember} for active member access,
+    \item \texttt{requireStaff} for staff, librarian, or admin access,
+    \item \texttt{requireAdmin} for administrator-only actions.
+\end{itemize}
+
+\section{Catalog Management Module}
+The catalog module provides:
+\begin{itemize}[leftmargin=1.5em]
+    \item public book listing and filtering,
+    \item per-book detail retrieval,
+    \item ISBN lookup,
+    \item admin create, update, and delete operations,
+    \item cover metadata, availability counts, and reference-only restrictions.
+\end{itemize}
+
+On catalog changes, the backend can log audit data and synchronize core catalog attributes to Neo4j.
+
+\section{Member Management Module}
+Member management supports:
+\begin{itemize}[leftmargin=1.5em]
+    \item member registration,
+    \item login,
+    \item current-user lookup,
+    \item member listing and profile updates,
+    \item role and account-state aware access handling.
+\end{itemize}
+
+\section{Circulation Module}
+Circulation is one of the central modules of the project. The workflow includes:
+\begin{enumerate}[leftmargin=1.5em]
+    \item verifying that the selected book exists, is active, is not reference-only, and has available copies,
+    \item verifying that the selected member exists, is active, has no blocking dues, and does not already hold the same book,
+    \item creating a checkout transaction,
+    \item updating visit metadata,
+    \item recording activity logs and audit records,
+    \item synchronizing borrow information to Neo4j,
+    \item returning books, calculating fines, updating copy state, and recording financial entries if fines are produced.
+\end{enumerate}
+
+The circulation desk UI also records checkout and return condition states for books, which is an operationally relevant library feature.
+
+\section{Reservation Module}
+The reservation module allows members to place and cancel reservations while staff can inspect all reservations. Core logic includes:
+\begin{itemize}[leftmargin=1.5em]
+    \item active-member validation,
+    \item outstanding fine checks,
+    \item prevention of duplicate pending reservations,
+    \item automatic queue position assignment,
+    \item expiry date computation from site settings,
+    \item cancellation note handling and audit logging.
+\end{itemize}
+
+\section{Collections and Content Management Module}
+The system supports editorial and administrative content using a combination of PostgreSQL and MongoDB:
+\begin{itemize}[leftmargin=1.5em]
+    \item curated collections and pinned collections are stored in PostgreSQL,
+    \item site settings are stored in PostgreSQL key-value form,
+    \item CMS page sections are stored in MongoDB,
+    \item staff board posts are stored in PostgreSQL,
+    \item announcements are stored in MongoDB,
+    \item news content is managed separately through backend routes.
+\end{itemize}
+
+\section{Digital Library Module}
+There are two digital content paths:
+\begin{itemize}[leftmargin=1.5em]
+    \item \textbf{Administrative ebooks}: uploaded by administrators, stored in the \texttt{ebooks} table, and optionally exposed publicly.
+    \item \textbf{User library uploads}: uploaded by members, stored in \texttt{user\_uploaded\_books}, and readable through streaming routes.
+\end{itemize}
+
+The system also tracks reading progress in PostgreSQL using \texttt{reading\_progress}, making it possible to resume digital reading sessions.
+
+\section{Reviews, Ratings, and Engagement Module}
+The review subsystem is hybrid by design:
+\begin{itemize}[leftmargin=1.5em]
+    \item structured numeric ratings are stored in PostgreSQL (\texttt{book\_ratings}),
+    \item review documents, comments, replies, and reactions are stored in MongoDB,
+    \item review-like events are synchronized to Neo4j for recommendation enrichment,
+    \item GIF search and trending support is provided through a Giphy integration route.
+\end{itemize}
+
+This is a strong example of polyglot modelling inside a single feature domain.
+
+\section{Analytics and Reporting Module}
+The reporting layer is divided by workload:
+\begin{itemize}[leftmargin=1.5em]
+    \item MongoDB: activity dashboards and behavioural trends,
+    \item MySQL: financial and audit summaries,
+    \item PostgreSQL: collection analytics and circulation reports,
+    \item combined overview endpoint: aggregates multiple sources in one response.
+\end{itemize}
+
+The admin reports page periodically refreshes key metrics, demonstrating live operational reporting.
+
+\section{Recommendation and Wishlist Module}
+The recommendation subsystem provides:
+\begin{itemize}[leftmargin=1.5em]
+    \item popular books,
+    \item related books,
+    \item personalized recommendations,
+    \item trending books for a period,
+    \item also-borrowed suggestions,
+    \item member reading-profile insights,
+    \item wishlist and wishlist-based recommendations.
+\end{itemize}
+
+\section{Financial and Audit Module}
+Financial operations combine PostgreSQL and MySQL:
+\begin{itemize}[leftmargin=1.5em]
+    \item PostgreSQL functions update member fines and generate dashboard values,
+    \item MySQL records immutable ledger entries for payments, fines, waivers, and refunds,
+    \item MySQL also stores audit trail records linked to book and circulation events.
+\end{itemize}
+
+\chapter{Query Design and Database Logic}
+\section{Representative PostgreSQL Queries}
+The following query patterns are central to the system.
+
+\subsection{Basic Query: Active Loans}
+\begin{lstlisting}[language=SQL]
+SELECT *
+FROM transactions
+WHERE status IN ('checked_out', 'overdue')
+ORDER BY checkout_date DESC;
+\end{lstlisting}
+This query supports the circulation desk and active-loan displays.
+
+\subsection{Advanced Query: Popular Books by Circulation}
+\begin{lstlisting}[language=SQL]
+SELECT b.id AS "bookId",
+       b.title,
+       b.author,
+       COUNT(DISTINCT t.id) AS "checkoutCount",
+       COUNT(DISTINCT r.id) AS "reservationCount"
+FROM books b
+LEFT JOIN transactions t ON t.book_id = b.id
+LEFT JOIN reservations r ON r.book_id = b.id
+WHERE b.is_active = true
+GROUP BY b.id, b.title, b.author
+HAVING COUNT(DISTINCT t.id) > 0
+ORDER BY "checkoutCount" DESC, "reservationCount" DESC;
+\end{lstlisting}
+This query is used for collection analytics and demand analysis.
+
+\subsection{Advanced Query: Availability Forecast}
+\begin{lstlisting}[language=SQL]
+SELECT b.id AS "bookId",
+       b.title,
+       COUNT(DISTINCT r.id) AS "waitlistCount",
+       MIN(t.due_date) AS "earliestDueDate"
+FROM books b
+LEFT JOIN reservations r
+    ON r.book_id = b.id AND r.status = 'pending'
+LEFT JOIN transactions t
+    ON t.book_id = b.id
+   AND t.status = 'checked_out'
+   AND t.return_date IS NULL
+WHERE b.available_copies = 0
+GROUP BY b.id, b.title
+HAVING COUNT(DISTINCT r.id) > 0;
+\end{lstlisting}
+This query predicts pressure points in library demand.
+
+\section{Representative PL/pgSQL Functions and Triggers}
+\subsection{Automatic Timestamp Trigger}
+The following function and trigger are used to automatically maintain modification timestamps for relational tables such as books, collections, and site settings.
+
+\begin{lstlisting}[language=SQL]
+CREATE OR REPLACE FUNCTION public.fn_update_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_books_updated_at ON public.books;
+CREATE TRIGGER trg_books_updated_at
+  BEFORE UPDATE ON public.books
+  FOR EACH ROW EXECUTE FUNCTION public.fn_update_timestamp();
+\end{lstlisting}
+
+\subsection{Inventory Update Trigger}
+This trigger adjusts available copy counts automatically when a transaction is inserted or updated.
+
+\begin{lstlisting}[language=SQL]
+CREATE OR REPLACE FUNCTION public.fn_update_available_copies()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF TG_OP = 'INSERT' AND NEW.status = 'checked_out' THEN
+    UPDATE public.books
+    SET available_copies = GREATEST(0, available_copies - 1)
+    WHERE id = NEW.book_id;
+
+  ELSIF TG_OP = 'UPDATE'
+    AND OLD.status = 'checked_out'
+    AND NEW.status = 'returned' THEN
+    UPDATE public.books
+    SET available_copies = LEAST(total_copies, available_copies + 1)
+    WHERE id = NEW.book_id;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_update_copies ON public.transactions;
+CREATE TRIGGER trg_update_copies
+  AFTER INSERT OR UPDATE ON public.transactions
+  FOR EACH ROW
+  EXECUTE FUNCTION public.fn_update_available_copies();
+\end{lstlisting}
+
+\subsection{Fine Calculation Trigger}
+This trigger calculates overdue fines when a checked-out book is returned late.
+
+\begin{lstlisting}[language=SQL]
+CREATE OR REPLACE FUNCTION public.fn_calculate_fine()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_days_overdue int;
+  v_daily_rate numeric := 0.50;
+  v_max_cap numeric := 20.00;
+  v_fine numeric := 0;
+BEGIN
+  IF NEW.status = 'returned'
+     AND NEW.return_date IS NOT NULL
+     AND OLD.status = 'checked_out' THEN
+
+    v_days_overdue := GREATEST(
+      0,
+      EXTRACT(DAY FROM (NEW.return_date::timestamptz - NEW.due_date::timestamptz))::int
+    );
+
+    IF v_days_overdue > 0 THEN
+      v_fine := LEAST(v_days_overdue * v_daily_rate, v_max_cap);
+      NEW.fine_amount := v_fine;
+
+      UPDATE public.members
+      SET fines = fines + v_fine
+      WHERE id = NEW.member_id;
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_calculate_fine ON public.transactions;
+CREATE TRIGGER trg_calculate_fine
+  BEFORE UPDATE ON public.transactions
+  FOR EACH ROW
+  EXECUTE FUNCTION public.fn_calculate_fine();
+\end{lstlisting}
+
+\subsection{Payment Processing Function}
+This database-side function is called by the financial API to reduce outstanding fines and mark eligible fine transactions as paid.
+
+\begin{lstlisting}[language=SQL]
+CREATE OR REPLACE FUNCTION public.fn_process_payment(
+  p_member_id int,
+  p_amount numeric,
+  p_processed_by text DEFAULT 'system'
+)
+RETURNS TABLE(remaining_balance numeric) AS $$
+BEGIN
+  UPDATE public.members
+  SET fines = GREATEST(0, fines - p_amount)
+  WHERE id = p_member_id;
+
+  UPDATE public.transactions
+  SET fine_paid = true
+  WHERE id IN (
+    SELECT id FROM public.transactions
+    WHERE member_id = p_member_id
+      AND fine_amount > 0
+      AND fine_paid = false
+    ORDER BY checkout_date ASC
+    LIMIT 50
+  )
+  AND fine_amount <= p_amount;
+
+  RETURN QUERY
+  SELECT fines FROM public.members WHERE id = p_member_id;
+END;
+$$ LANGUAGE plpgsql;
+\end{lstlisting}
+
+\section{Representative MySQL Queries}
+\subsection{Financial Summary}
+\begin{lstlisting}[language=SQL]
+SELECT transaction_type AS type,
+       COUNT(*) AS count,
+       SUM(amount) AS total,
+       AVG(amount) AS avgAmount
+FROM financial_records
+WHERE created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+GROUP BY transaction_type
+ORDER BY total DESC;
+\end{lstlisting}
+
+\subsection{Outstanding Balance per Member}
+\begin{lstlisting}[language=SQL]
+SELECT member_id,
+       SUM(CASE WHEN transaction_type = 'fine' THEN amount ELSE 0 END) AS total_fined,
+       SUM(CASE WHEN transaction_type = 'payment' THEN amount ELSE 0 END) AS total_paid,
+       SUM(CASE WHEN transaction_type = 'fine' THEN amount ELSE 0 END)
+       - SUM(CASE WHEN transaction_type IN ('payment','waiver') THEN amount ELSE 0 END)
+         AS outstanding
+FROM financial_records
+GROUP BY member_id
+HAVING outstanding > 0
+ORDER BY outstanding DESC;
+\end{lstlisting}
+
+\section{Representative MongoDB Filtering Queries}
+\subsection{Content Retrieval Query}
+The system uses direct document filtering for CMS-driven page composition.
+
+\begin{lstlisting}[language=Java]
+db.collection('cms_pages')
+  .find({ page: 'home', is_active: true })
+  .sort({ section: 1 })
+\end{lstlisting}
+
+\subsection{Announcement Retrieval Query}
+Active announcements are filtered and ordered by priority and creation time.
+
+\begin{lstlisting}[language=Java]
+db.collection('announcements')
+  .find({ is_active: true })
+  .sort({ priority: -1, created_at: -1 })
+\end{lstlisting}
+
+\subsection{Review Reaction Filter Query}
+This query identifies whether a given member has liked a set of review documents.
+
+\begin{lstlisting}[language=Java]
+db.collection('review_reactions')
+  .find({
+      review_id: { $in: reviewIds },
+      member_id: viewerId,
+      type: 'like'
+  })
+  .project({ review_id: 1 })
+\end{lstlisting}
+
+\subsection{Activity Feed Query}
+Recent activity logs are retrieved using filtering, sorting, and limiting.
+
+\begin{lstlisting}[language=Java]
+db.collection('activity_logs')
+  .find({})
+  .sort({ timestamp: -1 })
+  .limit(50)
+\end{lstlisting}
+
+\section{Representative MongoDB Aggregation Pipelines}
+\subsection{Activity Summary by Action}
+\begin{lstlisting}[language=Java]
+[
+  { $match: { timestamp: { $gte: startDate } } },
+  { $group: {
+      _id: '$action',
+      count: { $sum: 1 },
+      latestActivity: { $max: '$timestamp' },
+      uniqueUsers: { $addToSet: '$performed_by' }
+  }},
+  { $project: {
+      _id: 0,
+      action: '$_id',
+      count: 1,
+      latestActivity: 1,
+      uniqueUserCount: { $size: '$uniqueUsers' }
+  }},
+  { $sort: { count: -1 } }
+]
+\end{lstlisting}
+
+\subsection{Dashboard Pipeline with Faceting}
+\begin{lstlisting}[language=Java]
+[
+  { $match: { timestamp: { $gte: startDate, $lte: endDate } } },
+  { $facet: {
+      totalActivities: [{ $count: 'total' }],
+      actionBreakdown: [{ $group: { _id: '$action', count: { $sum: 1 } } }],
+      entityBreakdown: [{ $group: { _id: '$entity_type', count: { $sum: 1 } } }],
+      topUsers: [
+        { $match: { performed_by: { $ne: 'system' } } },
+        { $group: { _id: '$performed_by', count: { $sum: 1 } } }
+      ],
+      recentActivities: [{ $sort: { timestamp: -1 } }, { $limit: 10 }]
+  }}
+]
+\end{lstlisting}
+
+\section{Representative Neo4j Cypher Queries}
+\subsection{Personalized Recommendation}
+\begin{lstlisting}[language=SQL]
+MATCH (m:Member {id: $memberId})-[:BORROWED]->(b:Book)<-[:BORROWED]-(other:Member)
+MATCH (other)-[:BORROWED]->(rec:Book)
+WHERE NOT (m)-[:BORROWED]->(rec)
+RETURN DISTINCT rec.id AS book_id, rec.title AS title, count(other) AS score
+ORDER BY score DESC
+LIMIT $limit
+\end{lstlisting}
+
+\subsection{Related Books}
+\begin{lstlisting}[language=SQL]
+MATCH (b:Book {id: $bookId})-[:WRITTEN_BY]->(a:Author)<-[:WRITTEN_BY]-(related:Book)
+WHERE related.id <> $bookId
+RETURN DISTINCT related.id AS book_id, related.title AS title, 'same_author' AS reason
+UNION
+MATCH (b:Book {id: $bookId})-[:BELONGS_TO]->(c:Category)<-[:BELONGS_TO]-(related:Book)
+WHERE related.id <> $bookId
+RETURN DISTINCT related.id AS book_id, related.title AS title, 'same_category' AS reason
+LIMIT $limit
+\end{lstlisting}
+
+\section{Business Logic Placement}
+An important design decision in this project is deliberate distribution of logic:
+\begin{itemize}[leftmargin=1.5em]
+    \item database logic is used where atomicity and constraint proximity matter,
+    \item application logic is used for orchestration across services and for fallback handling,
+    \item analytics logic is isolated in per-database modules,
+    \item graph logic is confined to recommendation and profile operations.
+\end{itemize}
+
+\chapter{User Interface and Workflow Design}
+\section{Public User Workflow}
+The public user can:
+\begin{enumerate}[leftmargin=1.5em]
+    \item land on the home page,
+    \item browse collections and catalog pages,
+    \item inspect book details,
+    \item create an account and log in,
+    \item access member-only features after authentication.
+\end{enumerate}
+
+\section{Member Workflow}
+The member journey includes:
+\begin{enumerate}[leftmargin=1.5em]
+    \item sign up and login,
+    \item view dashboard,
+    \item inspect active loans and history,
+    \item place or cancel reservations,
+    \item explore recommendations,
+    \item maintain a wishlist,
+    \item read public ebooks,
+    \item upload personal digital books,
+    \item update reading progress,
+    \item submit ratings, reviews, comments, and reactions.
+\end{enumerate}
+
+\section{Staff Workflow}
+Staff-facing operations include:
+\begin{enumerate}[leftmargin=1.5em]
+    \item searching for a member,
+    \item selecting a book,
+    \item performing checkout with condition tracking,
+    \item processing returns with fine visibility,
+    \item inspecting overdue items,
+    \item viewing recent returns and member history,
+    \item processing financial activity,
+    \item reviewing audit and report dashboards.
+\end{enumerate}
+
+\section{Administrator Workflow}
+Administrators can:
+\begin{itemize}[leftmargin=1.5em]
+    \item manage books, members, collections, site settings, CMS content, ebooks, and announcements,
+    \item moderate reviews,
+    \item monitor analytics and financial dashboards,
+    \item inspect job history and system health,
+    \item manage reservation and circulation states through staff interfaces.
+\end{itemize}
+
+\chapter{Security, Reliability, and Operations}
+\section{Security Controls}
+The project incorporates multiple security-oriented mechanisms:
+\begin{itemize}[leftmargin=1.5em]
+    \item JWT verification from multiple token sources,
+    \item role-based middleware for protected endpoints,
+    \item password hashing using \texttt{bcryptjs},
+    \item restricted file extensions for ebook upload,
+    \item administrative separation of concerns,
+    \item PostgreSQL RLS helper functions and policies in migration scripts.
+\end{itemize}
+
+\section{Operational Monitoring}
+The \texttt{/health} endpoint provides:
+\begin{itemize}[leftmargin=1.5em]
+    \item PostgreSQL, MongoDB, MySQL, and Neo4j connection status,
+    \item PostgreSQL pool statistics,
+    \item cache statistics,
+    \item log queue statistics,
+    \item scheduled job status.
+\end{itemize}
+
+\section{Background Jobs}
+The scheduler uses \texttt{node-cron} and manages:
+\begin{itemize}[leftmargin=1.5em]
+    \item daily fine calculation,
+    \item daily member suspension,
+    \item daily reservation expiry.
+\end{itemize}
+
+Job execution history and statistics are recorded through MongoDB analytics collections. Manual triggering endpoints are also available for administration.
+
+\section{Graceful Shutdown and Error Handling}
+The server stops scheduled jobs and database connections during shutdown. Unhandled promise rejections and uncaught exceptions are trapped and reported. Slow requests are logged for operational visibility.
+
+\chapter{Testing and Validation}
+\section{Validation Strategy}
+The codebase emphasizes:
+\begin{itemize}[leftmargin=1.5em]
+    \item middleware-based authentication and authorization checks,
+    \item route-level validation and parameter parsing,
+    \item database constraints and unique indexes,
+    \item business-rule enforcement through stored procedures and application logic,
+    \item error handling through a centralized exception layer.
+\end{itemize}
+
+\section{Manual and Integration-Oriented Test Coverage}
+Based on the repository structure and implementation pattern, the project is primarily validated through integration-oriented execution rather than a dedicated automated unit-test suite. The following test scenarios are naturally supported by the implementation:
+
+\begin{longtable}{p{0.30\textwidth} p{0.60\textwidth}}
+\toprule
+\textbf{Test Scenario} & \textbf{Expected Validation Outcome} \\
+\midrule
+\endhead
+Member signup and login & New member creation, hashed password storage, JWT issuance, and dashboard access. \\
+Book search and detail retrieval & Filtered catalog listing, per-book metadata, and availability visibility. \\
+Checkout workflow & Blocking of invalid borrowers, duplicate checkouts, unavailable books, and reference-only items. \\
+Return workflow & Return status update, fine calculation, activity logging, and optional ledger insertion. \\
+Reservation workflow & Queue position assignment, duplicate prevention, and member-specific visibility. \\
+Admin book management & Create, update, deactivate, and delete book records with data refresh in frontend views. \\
+Review flow & Review creation, duplicate-review prevention, rating linkage, comment threads, and like toggling. \\
+Analytics dashboard & Aggregated data retrieval from MongoDB, MySQL, and PostgreSQL. \\
+Recommendation routes & Graph query execution and relational fallback when graph data is unavailable. \\
+Digital library & Controlled upload, retrieval, and streaming of EPUB/PDF files. \\
+\bottomrule
+\end{longtable}
+
+\section{Limitations in Testing}
+The current repository does not expose a formal automated test suite with named test runners for backend integration, frontend component tests, or end-to-end browser automation. Therefore, a professional next step would be to add:
+\begin{itemize}[leftmargin=1.5em]
+    \item backend route and service tests,
+    \item database integration tests,
+    \item frontend component and route tests,
+    \item end-to-end flows for checkout, reservation, and payment processing.
+\end{itemize}
+
+\chapter{Results, Limitations, and Future Work}
+\section{Project Outcomes}
+The project successfully demonstrates:
+\begin{itemize}[leftmargin=1.5em]
+    \item a working full-stack library platform,
+    \item multi-database integration in one coherent application,
+    \item role-aware operational workflows,
+    \item database-side logic through functions and triggers,
+    \item analytical reporting across heterogeneous data stores,
+    \item relationship-driven recommendations using Neo4j,
+    \item digital library and review features that go beyond a minimal DBMS project.
+\end{itemize}
+
+\section{Current Limitations}
+The main present limitations are:
+\begin{itemize}[leftmargin=1.5em]
+    \item absence of a formal automated test suite,
+    \item no dedicated message broker for asynchronous workflows,
+    \item limited deployment automation documentation,
+    \item optional-store synchronization that is not yet fully transactional across all databases,
+    \item branding remnants in some seed data and UI copy, though the technical design remains valid.
+\end{itemize}
+
+\section{Future Enhancements}
+Recommended future improvements include:
+\begin{enumerate}[leftmargin=1.5em]
+    \item barcode or RFID integration for circulation desk workflows,
+    \item email and SMS notification support for reservations and due reminders,
+    \item stronger automated testing and CI pipelines,
+    \item audit-grade immutable event streaming for cross-database synchronization,
+    \item advanced recommendation ranking with weights and feedback loops,
+    \item fine-grained analytics dashboards with visual charting and export,
+    \item mobile application or progressive web application support.
+\end{enumerate}
+
+\chapter{Conclusion}
+The \textbf{Library Management System} delivers a complete and well-structured solution for modern library operations. It supports catalog management, member administration, circulation, reservations, digital reading, reviews, analytics, financial tracking, and recommendation features within one connected platform. PostgreSQL ensures reliability for core transactions, MySQL provides clear audit and financial visibility, MongoDB handles flexible content and analytics efficiently, and Neo4j adds relationship-driven intelligence that improves discovery and personalization.
+
+The overall result is a system that is practical, scalable, and modular. It reduces manual work, improves traceability, supports better decision-making through analytics, and creates a stronger experience for both library staff and members. By combining multiple database models in a purposeful way, the project achieves far more than a basic library application and shows how a well-designed data architecture can directly improve system capability, maintainability, and user experience.
+
+\chapter*{References}
+\addcontentsline{toc}{chapter}{References}
+\begin{enumerate}[leftmargin=1.5em]
+    \item Project source repository: \texttt{frontend/} and \texttt{backend/}.
+    \item Prisma schema: \texttt{backend/prisma/schema.prisma}.
+    \item PostgreSQL migration script: \texttt{backend/supabase\_migration.sql}.
+    \item MySQL schema definition: \texttt{backend/mysql-schema.sql}.
+    \item Neo4j synchronization and recommendation logic: \texttt{backend/src/db/neo4j.js}.
+    \item MongoDB analytics module: \texttt{backend/src/db/mongoAnalytics.js}.
+    \item MySQL analytics module: \texttt{backend/src/db/financialAnalytics.js}.
+    \item PostgreSQL analytics module: \texttt{backend/src/db/collectionAnalytics.js}.
+\end{enumerate}
+
+\appendix
+\chapter{Backend Route Inventory}
+\begin{longtable}{p{0.26\textwidth} p{0.24\textwidth} p{0.38\textwidth}}
+\toprule
+\textbf{Route Group} & \textbf{Path Prefix} & \textbf{Purpose} \\
+\midrule
+\endhead
+Authentication & \texttt{/api/auth} & Signup, login, current user, staff identity checks. \\
+Books & \texttt{/api/books} & Catalog search, lookup, create, update, delete. \\
+Members & \texttt{/api/members} & Member listing and maintenance. \\
+Circulation & \texttt{/api/circulation} & Checkout, checkin, active loans, overdue items, histories. \\
+Reservations & \texttt{/api/reservations} & Create, cancel, list own reservations, staff reservation views. \\
+Collections & \texttt{/api/collections} & Public and admin collection management. \\
+Settings & \texttt{/api/settings} & Key-value site settings management. \\
+CMS & \texttt{/api/cms} & Page-section content retrieval and update. \\
+Announcements & \texttt{/api/announcements} & Public and admin notice management. \\
+News & \texttt{/api/news} & News creation, listing, update, and deletion. \\
+Ebooks & \texttt{/api/ebooks} & Admin ebook management and public ebook reading. \\
+User Library & \texttt{/api/user-library} & Member uploads, reading progress, and streaming of personal digital books. \\
+Wishlist & \texttt{/api/wishlist} & Wishlist add, remove, list, and recommendation access. \\
+Reviews & \texttt{/api/reviews} & Public review views, member review actions, admin moderation. \\
+Recommendations & \texttt{/api/recommendations} & Popular, related, trending, collaborative, and profile recommendations. \\
+Financial & \texttt{/api/financial} & Payment processing, summaries, and member ledger access. \\
+Analytics & \texttt{/api/analytics} & Activity, financial, collection, and combined analytics dashboards. \\
+Reports & \texttt{/api/reports} & Legacy and direct report endpoints for statistics and summaries. \\
+Audit & \texttt{/api/audit} & Audit-trail lookup and filtering. \\
+Dashboard & \texttt{/api/dashboard} & Summary dashboard statistics. \\
+Jobs & \texttt{/api/jobs} & Scheduled job status, triggering, history, and statistics. \\
+Staff Board & \texttt{/api/staff-board} & Administrative internal communication posts. \\
+Giphy & \texttt{/api/giphy} & GIF search and trending media for review attachments. \\
+\bottomrule
+\end{longtable}
+
+\chapter{Frontend Route Inventory}
+\begin{longtable}{p{0.30\textwidth} p{0.58\textwidth}}
+\toprule
+\textbf{Route} & \textbf{Purpose} \\
+\midrule
+\endhead
+\texttt{/} & Home page with dynamic sections and announcements. \\
+\texttt{/book/:id} & Detailed view of a selected book. \\
+\texttt{/search}, \texttt{/catalog}, \texttt{/catalogue} & Catalog browsing and search experience. \\
+\texttt{/dashboard} & Member dashboard with loans, history, reservations, recommendations, reviews, and finance summary. \\
+\texttt{/about} & Public informational page. \\
+\texttt{/login}, \texttt{/signup}, \texttt{/admin-login} & Authentication entry points. \\
+\texttt{/book-reader} & Digital reading interface. \\
+\texttt{/collections} & Curated collection display. \\
+\texttt{/wishlist} & Member wishlist page. \\
+\texttt{/ebooks} & Public/member-facing ebook library. \\
+\texttt{/admin} & Admin dashboard landing page. \\
+\texttt{/admin/books} & Book management console. \\
+\texttt{/admin/members} & Member management console. \\
+\texttt{/admin/circulation} & Circulation desk interface. \\
+\texttt{/admin/audit-trail} & Audit inspection view. \\
+\texttt{/admin/reports} & Analytics and reporting view. \\
+\texttt{/admin/cms} & CMS manager. \\
+\texttt{/admin/ebooks} & Ebook management panel. \\
+\texttt{/admin/reviews} & Review moderation panel. \\
+\texttt{/admin/content} & Content and announcements management. \\
+\texttt{/admin/settings} & System settings management. \\
+\bottomrule
+\end{longtable}
+
+\chapter{Major Database Objects Summary}
+\begin{table}[h!]
+\centering
+\begin{tabularx}{\textwidth}{p{0.20\textwidth} p{0.28\textwidth} X}
+\toprule
+\textbf{Store} & \textbf{Objects} & \textbf{Remarks} \\
+\midrule
+PostgreSQL & \texttt{books}, \texttt{members}, \texttt{transactions}, \texttt{reservations}, \texttt{collections}, \texttt{ebooks}, \texttt{reading\_progress}, \texttt{site\_settings}, and related functions/triggers & Primary source of truth. \\
+MySQL & \texttt{audit\_trail}, \texttt{member\_audit\_log}, \texttt{financial\_records} & Administrative trace and finance workloads. \\
+MongoDB & \texttt{activity\_logs}, \texttt{cms\_pages}, \texttt{announcements}, \texttt{reviews}, \texttt{review\_reactions}, \texttt{analytics} & Flexible document and aggregation workloads. \\
+Neo4j & \texttt{Book}, \texttt{Member}, \texttt{Author}, \texttt{Category}, \texttt{Tag}, \texttt{Ebook}, relationship graph & Recommendation and relationship intelligence. \\
+\bottomrule
+\end{tabularx}
+\caption{Database object summary}
+\end{table}
+
+\end{document}

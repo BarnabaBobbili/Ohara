@@ -34,6 +34,7 @@ export default function AdminLayout() {
         { path: '/admin', icon: 'dashboard', label: 'Registry', exact: true },
         { path: '/admin/books', icon: 'auto_stories', label: 'Archives' },
         { path: '/admin/circulation', icon: 'sync_alt', label: 'Circulation' },
+        { path: '/admin/loan-overview', icon: 'library_books', label: 'Loan Overview' },
         { path: '/admin/members', icon: 'groups', label: 'Patrons' },
         { path: '/admin/cms', icon: 'edit_note', label: 'CMS Studio' },
         { path: '/admin/content', icon: 'campaign', label: 'News & Alerts' },
