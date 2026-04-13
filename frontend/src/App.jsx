@@ -27,6 +27,7 @@ import ReviewModeration from './pages/admin/ReviewModeration';
 import LoanOverview from './pages/admin/LoanOverview';
 import WishlistPage from './pages/WishlistPage';
 import EbookLibrary from './pages/EbookLibrary';
+import EbookReader from './pages/EbookReader';
 
 import './index.css';
 
@@ -51,6 +52,7 @@ function App() {
         <Route path="/collections" element={<CollectionsPage />} />
         <Route path="/wishlist" element={<WishlistPage />} />
         <Route path="/ebooks" element={<EbookLibrary />} />
+        <Route path="/reader/:source/:id" element={<EbookReader />} />
 
         {/* Admin Routes */}
         <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>

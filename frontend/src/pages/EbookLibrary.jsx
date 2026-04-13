@@ -14,7 +14,6 @@ export default function EbookLibrary() {
     const [ebooks, setEbooks] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('all'); // all | pdf | epub
-    const [readingId, setReadingId] = useState(null); // id of ebook being read
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -32,42 +31,6 @@ export default function EbookLibrary() {
     const filteredEbooks = ebooks.filter(e =>
         filter === 'all' || e.file_format === filter
     );
-
-    // If an ebook is selected for reading, show it in an iframe
-    if (readingId) {
-        const readUrl = publicEbooksAPI.getReadUrl(readingId);
-        const ebook = ebooks.find(e => e.id === readingId);
-        return (
-            <>
-                <Header />
-                <div className="min-h-screen bg-[#1e1614] pt-20 flex flex-col">
-                    <div className="flex items-center justify-between px-6 py-3 bg-[#2a2622] border-b border-[#3d3935]">
-                        <div>
-                            <p className="text-white font-bold text-sm" style={{ fontFamily: "'Newsreader', serif" }}>
-                                {ebook?.title || 'Reading'}
-                            </p>
-                            <p className="text-gray-400 text-xs italic" style={{ fontFamily: "'Noto Sans', sans-serif" }}>
-                                {ebook?.author || ''}
-                            </p>
-                        </div>
-                        <button
-                            onClick={() => setReadingId(null)}
-                            className="flex items-center gap-1.5 px-4 py-2 bg-[#c16549] text-white text-xs font-medium rounded-sm hover:bg-[#89332a] transition-colors"
-                            style={{ fontFamily: "'Noto Sans', sans-serif" }}>
-                            <span className="material-symbols-outlined text-[16px]">close</span>
-                            Close Reader
-                        </button>
-                    </div>
-                    <iframe
-                        src={readUrl}
-                        title={ebook?.title || 'Ebook'}
-                        className="flex-1 w-full border-0"
-                        style={{ minHeight: 'calc(100vh - 108px)' }}
-                    />
-                </div>
-            </>
-        );
-    }
 
     return (
         <>
@@ -181,11 +144,11 @@ export default function EbookLibrary() {
 
                                     {/* Read Button */}
                                     <button
-                                        onClick={() => setReadingId(ebook.id)}
+                                        onClick={() => navigate(`/reader/public/${ebook.id}`)}
                                         className="flex items-center justify-center gap-2 w-full py-2.5 bg-[#c16549] hover:bg-[#89332a] text-white text-sm font-medium rounded-sm transition-colors"
                                         style={{ fontFamily: "'Noto Sans', sans-serif" }}>
-                                        <span className="material-symbols-outlined text-[18px]">menu_book</span>
-                                        Read Now
+                                        <span className="material-symbols-outlined text-[18px]">auto_stories</span>
+                                        Open Reader
                                     </button>
                                 </div>
                             ))}

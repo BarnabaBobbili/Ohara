@@ -316,8 +316,9 @@ export const wishlistAPI = {
 // ============= Public Ebooks API (Member) =============
 
 export const publicEbooksAPI = {
-    getAll:     () => fetchAPI('/ebooks/public', { headers: getMemberAuthHeaders() }),
-    getReadUrl: (id) => `${API_BASE_URL}/ebooks/public/${id}/read`,
+    getAll:      () => fetchAPI('/ebooks/public', { headers: getMemberAuthHeaders() }),
+    getReadUrl:  (id) => `${API_BASE_URL}/ebooks/public/${id}/read`,                          // legacy redirect
+    getReaderInfo: (id) => fetchAPI(`/ebooks/public/${id}/read-url`, { headers: getMemberAuthHeaders() }), // {url,format,title,author}
 };
 
 // ============= Financial API (Admin) =============
@@ -385,6 +386,23 @@ export const userLibraryAPI = {
 
     // Build a streaming URL for own ebook (open in new tab / iframe)
     getReadUrl: (bookId) => `${API_BASE_URL}/user-library/my/${bookId}/read`,
+
+    // Fetch {url, format, title, author} for the in-app reader
+    getReaderInfo: (bookId) => fetchAPI(`/user-library/my/${bookId}/read-url`, { headers: getMemberAuthHeaders() }),
+
+    // Reading progress (single title)
+    getProgress: (bookType, bookId) =>
+        fetchAPI(`/user-library/progress/${bookType}/${bookId}`, { headers: getMemberAuthHeaders() }),
+    updateProgress: (bookType, bookId, payload) =>
+        fetchAPI(`/user-library/progress/${bookType}/${bookId}`, {
+            method: 'PUT',
+            body: JSON.stringify(payload || {}),
+            headers: getMemberAuthHeaders(),
+        }),
+
+    // Reading journey (recent reads with progress + metadata)
+    getReadingJourney: (limit = 8) =>
+        fetchAPI(`/user-library/progress?limit=${limit}`, { headers: getMemberAuthHeaders() }),
 };
 
 // ============= Health Check =============

@@ -111,7 +111,7 @@ router.get('/', async (req, res) => {
         const limit = clampInteger(
             requestedLimit ?? (shouldPaginate ? 50 : 20),
             1,
-            100
+            2000   // raised to 2000 so admin pickers can load full catalogue
         );
         const requestedPage = parsePositiveInteger(page);
         const currentPage = clampInteger(requestedPage ?? 1, 1, 100000);
@@ -119,7 +119,7 @@ router.get('/', async (req, res) => {
             ? (currentPage - 1) * limit
             : parseSkipLimitPagination(req.query, {
                 defaultLimit: 20,
-                maxLimit: 100,
+                maxLimit: 2000,
                 maxSkip: 5000,
             }).skip;
 
@@ -280,13 +280,31 @@ router.get('/:id', async (req, res) => {
     try {
         const book = await prisma.books.findUnique({
             where: { id: Number.parseInt(req.params.id, 10) },
+            include: {
+                ebooks: {
+                    where: { is_public: true },
+                    orderBy: { uploaded_at: 'desc' },
+                    take: 1,
+                    select: {
+                        id: true,
+                        title: true,
+                        author: true,
+                        file_format: true,
+                        cover_path: true,
+                    },
+                },
+            },
         });
 
         if (!book) {
             return res.status(404).json({ detail: 'Book not found' });
         }
 
-        res.json(await attachRatingMetadata(book));
+        const { ebooks, ...bookData } = book;
+        res.json(await attachRatingMetadata({
+            ...bookData,
+            public_ebook: Array.isArray(ebooks) && ebooks.length > 0 ? ebooks[0] : null,
+        }));
     } catch (error) {
         res.status(500).json({ detail: error.message });
     }

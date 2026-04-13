@@ -25,6 +25,7 @@ export default function BookDetail() {
     const [alsoBorrowed, setAlsoBorrowed] = useState([]);
     const [similarBooks, setSimilarBooks] = useState([]);
     const [loadingHistory, setLoadingHistory] = useState(false);
+    const linkedPublicEbook = book?.public_ebook || null;
 
     const loadBookDetails = useCallback(async () => {
         setLoading(true);
@@ -69,7 +70,7 @@ export default function BookDetail() {
     useEffect(() => {
         let active = true;
 
-        if (!book || String(book.id) !== id) {
+        if (!book || String(book.id) !== id || book.public_ebook === undefined) {
             loadBookDetails();
         }
         loadBookHistory();
@@ -125,7 +126,7 @@ export default function BookDetail() {
         return () => {
             active = false;
         };
-    }, [book, id, loadBookDetails, loadBookHistory]);
+    }, [book, id, loadBookCircHistory, loadBookDetails, loadBookHistory]);
 
     useEffect(() => {
         const authState = getAuthState();
@@ -192,6 +193,16 @@ export default function BookDetail() {
         } finally {
             setReserving(false);
         }
+    };
+
+    const handleReadNow = () => {
+        if (!linkedPublicEbook?.id) return;
+        const authState = getAuthState();
+        if (!authState.isAuthenticated) {
+            navigate('/login');
+            return;
+        }
+        navigate(`/reader/public/${linkedPublicEbook.id}`);
     };
 
     const formatDate = (dateString) => {
@@ -498,6 +509,15 @@ export default function BookDetail() {
 
                             {/* Action Buttons */}
                             <div className="flex flex-wrap gap-4 mb-6 lg:mb-8">
+                                {linkedPublicEbook?.id && (
+                                    <button
+                                        onClick={handleReadNow}
+                                        className="bg-[#2f5233] hover:bg-[#1f3a24] text-white px-8 py-4 rounded-sm font-semibold tracking-wide transition-all editorial-shadow-lg flex items-center gap-2"
+                                        style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                        <span className="material-symbols-outlined text-[20px]">auto_stories</span>
+                                        Read Now ({(linkedPublicEbook.file_format || 'ebook').toUpperCase()})
+                                    </button>
+                                )}
                                 {myReservation?.status === 'pending' ? (
                                     <>
                                         <button

@@ -30,6 +30,16 @@ const parseIntegerParam = (value) => {
 };
 
 const normalizeFormat = (filename) => path.extname(filename || '').replace('.', '').toLowerCase() || 'pdf';
+const ALLOWED_READING_BOOK_TYPES = new Set(['public', 'my']);
+const normalizeReadingBookType = (value) => {
+    const normalized = String(value || '').toLowerCase();
+    return ALLOWED_READING_BOOK_TYPES.has(normalized) ? normalized : null;
+};
+const normalizeProgressPercent = (value) => {
+    const parsed = Number.parseFloat(String(value ?? 0));
+    if (!Number.isFinite(parsed)) return 0;
+    return Math.min(Math.max(parsed, 0), 100);
+};
 
 const toBookResponse = (book) => ({
     ...book,
@@ -186,17 +196,166 @@ router.get('/my/:bookId/read', authenticateToken, async (req, res) => {
     }
 });
 
-// GET /api/user-library/progress/:bookType/:bookId - Get reading progress
+// GET /api/user-library/my/:bookId/read-url — return JSON {url, format, title, author}
+router.get('/my/:bookId/read-url', authenticateToken, async (req, res) => {
+    try {
+        const member = await resolveAuthenticatedMember(req, res);
+        if (!member) return;
+
+        const loaded = await loadOwnBook(member.id, req.params.bookId);
+        if (loaded.error) {
+            return res.status(loaded.error.status).json({ detail: loaded.error.detail });
+        }
+        const { book } = loaded;
+
+        let url;
+        if (isSupabasePath(book.file_path)) {
+            url = await getSignedUrl(book.file_path, 60 * 60 * 2); // 2-hour URL
+        } else {
+            url = `/api/user-library/my/${book.id}/read`;
+        }
+
+        return res.json({
+            url,
+            format: book.file_format,
+            title:  book.title,
+            author: book.author,
+        });
+    } catch (error) {
+        return res.status(500).json({ detail: error.message });
+    }
+});
+
+
+// GET /api/user-library/progress - list member reading journey with ebook metadata
+router.get('/progress', authenticateToken, async (req, res) => {
+    try {
+        const member = await resolveAuthenticatedMember(req, res);
+        if (!member) return;
+
+        const requestedLimit = parseIntegerParam(req.query.limit);
+        const limit = requestedLimit && requestedLimit > 0
+            ? Math.min(requestedLimit, 20)
+            : 8;
+
+        const entries = await prisma.reading_progress.findMany({
+            where: { member_id: member.id },
+            orderBy: { last_read_at: 'desc' },
+            take: limit,
+        });
+
+        if (entries.length === 0) {
+            return res.json([]);
+        }
+
+        const publicIds = [...new Set(
+            entries
+                .filter((entry) => entry.book_type === 'public')
+                .map((entry) => parseIntegerParam(entry.book_id))
+                .filter((id) => Number.isInteger(id) && id > 0)
+        )];
+        const myIds = [...new Set(
+            entries
+                .filter((entry) => entry.book_type === 'my')
+                .map((entry) => parseIntegerParam(entry.book_id))
+                .filter((id) => Number.isInteger(id) && id > 0)
+        )];
+
+        const [publicEbooks, myEbooks] = await Promise.all([
+            publicIds.length > 0
+                ? prisma.ebooks.findMany({
+                    where: { id: { in: publicIds }, is_public: true },
+                    select: {
+                        id: true,
+                        title: true,
+                        author: true,
+                        file_format: true,
+                        cover_path: true,
+                        books: { select: { cover_image_url: true } },
+                    },
+                })
+                : Promise.resolve([]),
+            myIds.length > 0
+                ? prisma.user_uploaded_books.findMany({
+                    where: { id: { in: myIds }, member_id: member.id },
+                    select: {
+                        id: true,
+                        title: true,
+                        author: true,
+                        file_format: true,
+                        cover_path: true,
+                    },
+                })
+                : Promise.resolve([]),
+        ]);
+
+        const publicMap = new Map(publicEbooks.map((ebook) => [ebook.id, ebook]));
+        const myMap = new Map(myEbooks.map((ebook) => [ebook.id, ebook]));
+
+        const journey = entries
+            .map((entry) => {
+                const bookType = normalizeReadingBookType(entry.book_type);
+                const progressPercent = normalizeProgressPercent(entry.progress_percent);
+                const parsedBookId = parseIntegerParam(entry.book_id);
+                if (!bookType || !parsedBookId) return null;
+
+                if (bookType === 'public') {
+                    const ebook = publicMap.get(parsedBookId);
+                    if (!ebook) return null;
+                    return {
+                        id: entry.id,
+                        source: 'public',
+                        book_type: 'public',
+                        book_id: String(ebook.id),
+                        title: ebook.title,
+                        author: ebook.author,
+                        file_format: ebook.file_format,
+                        cover_image_url: ebook.cover_path || ebook.books?.cover_image_url || null,
+                        progress_percent: progressPercent,
+                        current_location: entry.current_location,
+                        last_read_at: entry.last_read_at,
+                    };
+                }
+
+                const ebook = myMap.get(parsedBookId);
+                if (!ebook) return null;
+                return {
+                    id: entry.id,
+                    source: 'my',
+                    book_type: 'my',
+                    book_id: String(ebook.id),
+                    title: ebook.title,
+                    author: ebook.author,
+                    file_format: ebook.file_format,
+                    cover_image_url: ebook.cover_path || null,
+                    progress_percent: progressPercent,
+                    current_location: entry.current_location,
+                    last_read_at: entry.last_read_at,
+                };
+            })
+            .filter(Boolean);
+
+        res.json(journey);
+    } catch (error) {
+        res.status(500).json({ detail: error.message });
+    }
+});
+
 router.get('/progress/:bookType/:bookId', authenticateToken, async (req, res) => {
     try {
         const member = await resolveAuthenticatedMember(req, res);
         if (!member) return;
 
+        const bookType = normalizeReadingBookType(req.params.bookType);
+        if (!bookType) {
+            return res.status(400).json({ detail: 'Invalid book type. Use "public" or "my".' });
+        }
+
         const progress = await prisma.reading_progress.findUnique({
             where: {
                 member_id_book_type_book_id: {
                     member_id: member.id,
-                    book_type: req.params.bookType,
+                    book_type: bookType,
                     book_id: req.params.bookId,
                 },
             },
@@ -215,7 +374,11 @@ router.put('/progress/:bookType/:bookId', authenticateToken, async (req, res) =>
         if (!member) return;
 
         const { current_location, progress_percent } = req.body;
-        const { bookType, bookId } = req.params;
+        const { bookId } = req.params;
+        const bookType = normalizeReadingBookType(req.params.bookType);
+        if (!bookType) {
+            return res.status(400).json({ detail: 'Invalid book type. Use "public" or "my".' });
+        }
         const parsedProgress = Number(progress_percent);
         const clampedProgress = Number.isFinite(parsedProgress)
             ? Math.min(Math.max(parsedProgress, 0), 100)

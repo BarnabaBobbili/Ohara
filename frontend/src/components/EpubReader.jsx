@@ -26,7 +26,7 @@ export default function EpubReader({ epubUrl, title }) {
                     width: '100%',
                     height: '100%',
                     spread: 'none',
-                    flow: 'paginated'
+                    flow: 'paginated',
                 });
                 renditionRef.current = rendition;
 

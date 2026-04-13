@@ -23,6 +23,44 @@ const upload = multer({
 });
 
 const normalizeFormat = (filename) => path.extname(filename || '').slice(1).toLowerCase() || 'pdf';
+const parseOptionalBookId = (value) => {
+    if (value === undefined || value === null || value === '') return null;
+    const parsed = Number.parseInt(String(value), 10);
+    return Number.isInteger(parsed) ? parsed : Number.NaN;
+};
+const parseBooleanLike = (value, fallback = false) => {
+    if (value === undefined) return fallback;
+    if (typeof value === 'boolean') return value;
+    const normalized = String(value).trim().toLowerCase();
+    if (['true', '1', 'yes'].includes(normalized)) return true;
+    if (['false', '0', 'no'].includes(normalized)) return false;
+    return fallback;
+};
+
+const getLinkedBook = async (rawBookId) => {
+    const parsedBookId = parseOptionalBookId(rawBookId);
+    if (Number.isNaN(parsedBookId)) {
+        return { error: 'Invalid book_id. It must be a valid integer.' };
+    }
+    if (parsedBookId === null) {
+        return { bookId: null, linkedBook: null };
+    }
+
+    const linkedBook = await prisma.books.findUnique({
+        where: { id: parsedBookId },
+        select: {
+            id: true,
+            title: true,
+            author: true,
+            cover_image_url: true,
+        },
+    });
+    if (!linkedBook) {
+        return { error: 'Linked book not found' };
+    }
+
+    return { bookId: parsedBookId, linkedBook };
+};
 
 const streamLegacyFile = (res, ebook) => {
     if (!ebook.file_path || !fs.existsSync(ebook.file_path)) {
@@ -56,7 +94,7 @@ router.get('/public', authenticateToken, async (req, res) => {
             orderBy: { uploaded_at: 'desc' },
             include: {
                 books: {
-                    select: { id: true, title: true, author: true, isbn: true },
+                    select: { id: true, title: true, author: true, isbn: true, cover_image_url: true },
                 },
             },
         });
@@ -87,6 +125,37 @@ router.get('/public/:id/read', authenticateToken, async (req, res) => {
     }
 });
 
+// GET /api/ebooks/public/:id/read-url — return JSON {url, format, title, author}
+// Used by the frontend reader to get the actual file URL without following a redirect.
+router.get('/public/:id/read-url', authenticateToken, async (req, res) => {
+    try {
+        const ebook = await prisma.ebooks.findFirst({
+            where: { id: Number.parseInt(req.params.id, 10), is_public: true },
+        });
+        if (!ebook) {
+            return res.status(404).json({ detail: 'Ebook not found or not public' });
+        }
+
+        let url;
+        if (isSupabasePath(ebook.file_path)) {
+            url = await getSignedUrl(ebook.file_path, 60 * 60 * 2); // 2-hour URL
+        } else {
+            // Legacy local: point to the stream endpoint (handled by that route)
+            url = `/api/ebooks/public/${ebook.id}/read`;
+        }
+
+        res.json({
+            url,
+            format: ebook.file_format,
+            title:  ebook.title,
+            author: ebook.author,
+        });
+    } catch (error) {
+        res.status(500).json({ detail: error.message });
+    }
+});
+
+
 router.get('/', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const ebooks = await prisma.ebooks.findMany({
@@ -98,6 +167,7 @@ router.get('/', authenticateToken, requireAdmin, async (req, res) => {
                         title: true,
                         author: true,
                         isbn: true,
+                        cover_image_url: true,
                     },
                 },
             },
@@ -117,18 +187,28 @@ router.post('/', authenticateToken, requireAdmin, upload.single('file'), async (
             return res.status(400).json({ detail: 'No file uploaded' });
         }
 
+        const linked = await getLinkedBook(book_id);
+        if (linked.error) {
+            return res.status(400).json({ detail: linked.error });
+        }
+
+        const cleanTitle = String(title || '').trim();
+        const cleanAuthor = String(author || '').trim();
+        const inferredTitle = path.parse(file.originalname).name;
+
         const storagePath = await uploadEbook(file.buffer, file.originalname, 'admin');
         let ebook;
         try {
             ebook = await prisma.ebooks.create({
                 data: {
-                    title: title || file.originalname,
-                    author: author || null,
-                    book_id: book_id ? Number.parseInt(book_id, 10) : null,
+                    title: cleanTitle || linked.linkedBook?.title || inferredTitle,
+                    author: cleanAuthor || linked.linkedBook?.author || null,
+                    book_id: linked.bookId,
                     file_path: storagePath,
                     file_format: normalizeFormat(file.originalname),
                     file_size_bytes: BigInt(file.size),
-                    is_public: is_public === 'true' || is_public === true,
+                    cover_path: linked.linkedBook?.cover_image_url || null,
+                    is_public: parseBooleanLike(is_public, false),
                     uploaded_by: null, // ebooks.uploaded_by references staff.id; actor is a member record
                 },
             });
@@ -162,14 +242,39 @@ router.post('/', authenticateToken, requireAdmin, upload.single('file'), async (
 router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { title, author, book_id, is_public } = req.body;
+        const linked = await getLinkedBook(book_id);
+        if (linked.error) {
+            return res.status(400).json({ detail: linked.error });
+        }
+
+        const cleanTitle = title === undefined ? undefined : String(title || '').trim();
+        const cleanAuthor = author === undefined ? undefined : String(author || '').trim();
+
+        const updateData = {};
+        if (title !== undefined) {
+            const resolvedTitle = cleanTitle || linked.linkedBook?.title;
+            if (resolvedTitle) updateData.title = resolvedTitle;
+        }
+        if (author !== undefined) {
+            updateData.author = cleanAuthor || linked.linkedBook?.author || null;
+        }
+        if (is_public !== undefined) {
+            updateData.is_public = parseBooleanLike(is_public, false);
+        }
+        if (book_id !== undefined) {
+            updateData.book_id = linked.bookId;
+            updateData.cover_path = linked.linkedBook?.cover_image_url || null;
+            if (title === undefined && linked.linkedBook?.title) {
+                updateData.title = linked.linkedBook.title;
+            }
+            if (author === undefined && linked.linkedBook) {
+                updateData.author = linked.linkedBook.author || null;
+            }
+        }
+
         const ebook = await prisma.ebooks.update({
             where: { id: Number.parseInt(req.params.id, 10) },
-            data: {
-                title,
-                author,
-                book_id: book_id ? Number.parseInt(book_id, 10) : null,
-                is_public: Boolean(is_public),
-            },
+            data: updateData,
         });
         res.json(ebook);
     } catch (error) {

@@ -80,6 +80,7 @@ export default function MemberDashboard() {
     const [dailyFineRate, setDailyFineRate] = useState(0.5);
     const [loading, setLoading]             = useState(true);
     const [readingProfile, setReadingProfile] = useState([]);
+    const [readingJourney, setReadingJourney] = useState([]);
     const [wishlistCount, setWishlistCount] = useState(0);
     const [trendingBooks, setTrendingBooks] = useState([]);
     const [myEbooks, setMyEbooks]           = useState([]);
@@ -102,18 +103,29 @@ export default function MemberDashboard() {
     const loadDashboard = useCallback(async () => {
         setLoading(true);
         try {
-            const [profile, loans, hist, settings, myReservations, myTransactions] = await Promise.all([
+            const [profile, loans, hist, settings, myReservations, myTransactions, journey] = await Promise.all([
                 authAPI.getCurrentUser().catch(() => null),
                 circulationAPI.getMyLoans().catch(() => []),
                 circulationAPI.getMyHistory({ limit: 6 }).catch(() => []),
                 settingsAPI.getAll().catch(() => ({})),
                 reservationsAPI.getMy({ limit: 10 }).catch(() => []),
                 financialAPI.getMyTransactions(8).catch(() => []),
+                userLibraryAPI.getReadingJourney(8).catch(() => []),
             ]);
             const loansArr = Array.isArray(loans) ? loans : [];
             const histArr  = Array.isArray(hist)  ? hist  : [];
             const reservationsArr = Array.isArray(myReservations) ? myReservations : [];
             const transactionsArr = Array.isArray(myTransactions) ? myTransactions : [];
+            const journeyArr = Array.isArray(journey)
+                ? journey.map((entry) => ({
+                    ...entry,
+                    source: entry?.source === 'my' ? 'my' : 'public',
+                    progress_percent: Math.min(
+                        Math.max(Number.parseFloat(entry?.progress_percent ?? 0) || 0, 0),
+                        100,
+                    ),
+                }))
+                : [];
             const fineRate = getNumericSetting(settings, ['daily_fine_rate', 'fine_per_day'], 0.5);
 
             setMemberProfile(profile);
@@ -123,6 +135,7 @@ export default function MemberDashboard() {
             setHistory(histArr);
             setReservations(reservationsArr);
             setFinancialTransactions(transactionsArr);
+            setReadingJourney(journeyArr);
 
             // Neo4j feature fetches (non-blocking, all catch errors silently)
             if (profile?.id) {
@@ -216,6 +229,13 @@ export default function MemberDashboard() {
 
     // Derived stats
     const currentRead = activeLoans[0] || null;
+    const currentEbookRead = readingJourney.find((entry) => Number.parseFloat(entry?.progress_percent || 0) < 100) || readingJourney[0] || null;
+    const currentEbookProgress = currentEbookRead
+        ? Math.min(Math.max(Number.parseFloat(currentEbookRead.progress_percent || 0), 0), 100)
+        : 0;
+    const currentEbookReaderPath = currentEbookRead
+        ? `/reader/${currentEbookRead.source || currentEbookRead.book_type || 'public'}/${currentEbookRead.book_id}`
+        : null;
     const dueSoonBook = activeLoans.find(l => {
         const days = getDaysUntilDue(l.due_date);
         return days <= 3;
@@ -355,7 +375,87 @@ export default function MemberDashboard() {
                                             <span className="material-symbols-outlined text-base align-middle mr-1.5">menu_book</span>
                                             Currently Reading
                                         </h2>
-                                        {currentRead ? (
+                                        {currentEbookRead ? (
+                                            <div className="relative group bg-white dark:bg-[#2a2622] rounded-sm editorial-shadow-lg flex flex-col md:flex-row gap-8 items-start hover:shadow-2xl transition-all duration-500 overflow-hidden border border-[#E8E4DF] dark:border-[#3d3935] h-full p-8 md:p-10">
+                                                <div className="absolute top-0 left-0 w-20 h-20 border-t-2 border-l-2 border-[#c16549]/20"></div>
+
+                                                <div className="relative shrink-0 w-40 md:w-56 lg:w-64 aspect-[2/3] rounded-r-lg rounded-l-sm book-shadow rotate-[-1deg] group-hover:rotate-0 transition-transform duration-700 ease-out origin-bottom overflow-hidden bg-[#E8E4DF] border-l-4 border-[#c16549]/30">
+                                                    {currentEbookRead.cover_image_url ? (
+                                                        <img
+                                                            src={currentEbookRead.cover_image_url}
+                                                            alt={currentEbookRead.title}
+                                                            className="w-full h-full object-cover"
+                                                        />
+                                                    ) : (
+                                                        <div className="w-full h-full bg-gradient-to-br from-[#89332a] to-[#c16549] flex items-end p-4">
+                                                            <p className="text-white font-bold italic text-base leading-tight" style={{ fontFamily: "'Newsreader', serif" }}>
+                                                                {currentEbookRead.title}
+                                                            </p>
+                                                        </div>
+                                                    )}
+                                                    <div className="absolute left-0 top-0 bottom-0 w-2 bg-gradient-to-r from-white/30 to-transparent"></div>
+                                                </div>
+
+                                                <div className="flex flex-col justify-between h-full w-full py-2">
+                                                    <div>
+                                                        <h3 className="text-3xl md:text-4xl font-bold text-[#1E1815] dark:text-white mb-3 leading-tight tracking-tight">
+                                                            {currentEbookRead.title}
+                                                        </h3>
+                                                        <p className="text-[#6B6560] dark:text-gray-400 text-lg italic" style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                                            by {currentEbookRead.author || 'Unknown Author'}
+                                                        </p>
+
+                                                        <div className="mt-6 flex flex-col gap-3 text-sm text-[#6B6560] dark:text-gray-400" style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                                            <div className="inline-flex w-fit">
+                                                                <span className="bg-[#f4ede8] dark:bg-[#3d3935] text-[#c16549] dark:text-[#f4a690] px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-widest border border-[#c16549]/20">
+                                                                    {(currentEbookRead.file_format || 'ebook').toUpperCase()}
+                                                                </span>
+                                                            </div>
+                                                            {currentEbookRead.last_read_at && (
+                                                                <span className="flex items-center gap-2">
+                                                                    <span className="material-symbols-outlined text-[16px] text-[#c16549]">schedule</span>
+                                                                    Last opened {new Date(currentEbookRead.last_read_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                                                                </span>
+                                                            )}
+                                                            <span className="flex items-center gap-2">
+                                                                <span className="material-symbols-outlined text-[16px] text-[#c16549]">track_changes</span>
+                                                                {Math.round(currentEbookProgress)}% completed
+                                                            </span>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="mt-8 md:mt-auto pt-6 border-t border-[#E8E4DF] dark:border-[#3d3935]">
+                                                        <div className="mb-4">
+                                                            <div className="flex items-center justify-between text-xs text-[#6B6560] dark:text-gray-400 mb-2" style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                                                <span>Reading Journey</span>
+                                                                <span className="font-semibold text-[#c16549]">{Math.round(currentEbookProgress)}%</span>
+                                                            </div>
+                                                            <div className="h-2 bg-[#E8E4DF] dark:bg-[#3d3935] rounded-full overflow-hidden">
+                                                                <div
+                                                                    className="h-full bg-gradient-to-r from-[#c16549] to-[#89332a] transition-all duration-500"
+                                                                    style={{ width: `${currentEbookProgress}%` }}
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex flex-wrap gap-3">
+                                                            <button
+                                                                onClick={() => currentEbookReaderPath && navigate(currentEbookReaderPath)}
+                                                                className="inline-flex items-center gap-2 bg-[#c16549] hover:bg-[#89332a] text-white px-6 py-3 rounded-sm text-sm font-medium editorial-shadow transition-all duration-300 hover:shadow-lg"
+                                                                style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                                                <span>Continue Reading</span>
+                                                                <span className="material-symbols-outlined text-[18px]">auto_stories</span>
+                                                            </button>
+                                                            <Link to="/ebooks"
+                                                                className="inline-flex items-center gap-2 bg-white dark:bg-[#2a2622] border border-[#E8E4DF] dark:border-[#3d3935] hover:border-[#c16549] text-[#1E1815] dark:text-white px-6 py-3 rounded-sm text-sm font-medium transition-all duration-300"
+                                                                style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                                                <span>Browse E-Library</span>
+                                                                <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
+                                                            </Link>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ) : currentRead ? (
                                             <div className="relative group bg-white dark:bg-[#2a2622] rounded-sm editorial-shadow-lg flex flex-col md:flex-row gap-8 items-start hover:shadow-2xl transition-all duration-500 overflow-hidden border border-[#E8E4DF] dark:border-[#3d3935] h-full p-8 md:p-10">
                                                 {/* Decorative corner accent */}
                                                 <div className="absolute top-0 left-0 w-20 h-20 border-t-2 border-l-2 border-[#c16549]/20"></div>
@@ -533,6 +633,61 @@ export default function MemberDashboard() {
                                         )}
                                     </div>
                                 </div>
+
+                                {readingJourney.length > 0 && (
+                                    <section className="animate-fade-in-up delay-400">
+                                        <h2 className="text-sm font-semibold text-[#c16549] tracking-[0.15em] uppercase mb-6"
+                                            style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                            <span className="material-symbols-outlined text-base align-middle mr-1.5">timeline</span>
+                                            Reading Journey
+                                        </h2>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                                            {readingJourney.slice(0, 4).map((entry, idx) => {
+                                                const progressPercent = Math.min(Math.max(Number.parseFloat(entry.progress_percent || 0), 0), 100);
+                                                const readerPath = `/reader/${entry.source || entry.book_type || 'public'}/${entry.book_id}`;
+                                                return (
+                                                    <div key={`${entry.source}-${entry.book_id}-${entry.id || idx}`}
+                                                        className="bg-white dark:bg-[#2a2622] rounded-sm p-5 flex gap-4 editorial-shadow border border-[#E8E4DF] dark:border-[#3d3935] hover:shadow-lg transition-all duration-300 group">
+                                                        <div className="w-11 h-16 rounded-sm overflow-hidden shrink-0 bg-[#E8E4DF] book-shadow group-hover:scale-105 transition-transform duration-300">
+                                                            {entry.cover_image_url ? (
+                                                                <img src={entry.cover_image_url} alt={entry.title} className="w-full h-full object-cover" />
+                                                            ) : (
+                                                                <div className="w-full h-full bg-gradient-to-br from-[#6B6560] to-[#89332a]" />
+                                                            )}
+                                                        </div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="font-semibold text-sm truncate text-[#1E1815] dark:text-white" style={{ fontFamily: "'Newsreader', serif" }}>
+                                                                {entry.title}
+                                                            </p>
+                                                            <p className="text-xs text-[#6B6560] dark:text-gray-400 truncate mt-0.5 italic" style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                                                {entry.author || 'Unknown Author'}
+                                                            </p>
+                                                            <div className="mt-2">
+                                                                <div className="h-1.5 bg-[#E8E4DF] dark:bg-[#3d3935] rounded-full overflow-hidden">
+                                                                    <div
+                                                                        className="h-full bg-gradient-to-r from-[#c16549] to-[#89332a] transition-all duration-500"
+                                                                        style={{ width: `${progressPercent}%` }}
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center justify-between mt-2">
+                                                                <span className="text-[10px] font-semibold uppercase tracking-wide text-[#c16549]" style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                                                    {Math.round(progressPercent)}% completed
+                                                                </span>
+                                                                <button
+                                                                    onClick={() => navigate(readerPath)}
+                                                                    className="text-[10px] font-semibold uppercase tracking-wide text-[#6B6560] hover:text-[#c16549] transition-colors"
+                                                                    style={{ fontFamily: "'Noto Sans', sans-serif" }}>
+                                                                    Continue
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </section>
+                                )}
 
                                 {/* Middle: All Active Loans (if more than 1) */}
                                 {activeLoans.length > 1 && (
@@ -805,16 +960,14 @@ export default function MemberDashboard() {
                                                             {book.file_size_bytes ? ` · ${(Number(book.file_size_bytes) / (1024 * 1024)).toFixed(1)} MB` : ''}
                                                         </p>
                                                         <div className="flex items-center gap-2 mt-2">
-                                                            <a
-                                                                href={userLibraryAPI.getReadUrl(book.id)}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
+                                                            <button
+                                                                onClick={() => navigate(`/reader/my/${book.id}`)}
                                                                 className="flex items-center gap-1 text-[10px] font-semibold text-[#c16549] hover:text-[#89332a] transition-colors uppercase tracking-wide"
                                                                 style={{ fontFamily: "'Noto Sans', sans-serif" }}
                                                             >
-                                                                <span className="material-symbols-outlined text-[13px]">open_in_new</span>
-                                                                Open
-                                                            </a>
+                                                                <span className="material-symbols-outlined text-[13px]">auto_stories</span>
+                                                                Read
+                                                            </button>
                                                             <span className="text-[#E8E4DF] dark:text-[#3d3935]">·</span>
                                                             <button
                                                                 onClick={() => handleEbookDelete(book.id)}
